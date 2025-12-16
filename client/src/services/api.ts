@@ -1,0 +1,209 @@
+import axios from 'axios';
+
+const API_URL = 'http://localhost:3001/api';
+
+const api = axios.create({
+    baseURL: API_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+// ============ AUTH ============
+export const authApi = {
+    login: async (name: string) => {
+        const response = await api.post('/login', { name });
+        return response.data;
+    },
+};
+
+// ============ EXPENSES ============
+export interface Expense {
+    id?: number;
+    description: string;
+    amount: number;
+    category: string;
+    date: string;
+    receipt_url?: string;
+    remarks?: string;
+    status?: string;
+    user_id?: number;
+}
+
+export const expensesApi = {
+    getAll: async (): Promise<Expense[]> => {
+        const response = await api.get('/expenses');
+        return response.data;
+    },
+    create: async (expense: Omit<Expense, 'id'>): Promise<Expense> => {
+        const response = await api.post('/expenses', expense);
+        return response.data;
+    },
+    update: async (id: number, expense: Partial<Expense>): Promise<Expense> => {
+        const response = await api.put(`/expenses/${id}`, expense);
+        return response.data;
+    },
+    delete: async (id: number): Promise<void> => {
+        await api.delete(`/expenses/${id}`);
+    },
+};
+
+// ============ SALES ============
+export interface Sale {
+    id?: number;
+    date: string;
+    agency: string;
+    supplier: string;
+    national: string;
+    service: string;
+    net_rate: number;
+    sales_rate: number;
+    profit: number;
+    passport_number?: string;
+    documents?: string;
+    remarks?: string;
+    status?: string;
+    user_id?: number;
+}
+
+export const salesApi = {
+    getAll: async (): Promise<Sale[]> => {
+        const response = await api.get('/sales');
+        return response.data;
+    },
+    create: async (sale: Omit<Sale, 'id'>): Promise<Sale> => {
+        const response = await api.post('/sales', sale);
+        return response.data;
+    },
+    update: async (id: number, sale: Partial<Sale>): Promise<Sale> => {
+        const response = await api.put(`/sales/${id}`, sale);
+        return response.data;
+    },
+    delete: async (id: number): Promise<void> => {
+        await api.delete(`/sales/${id}`);
+    },
+};
+
+// ============ STAFF ============
+export interface Staff {
+    id?: number;
+    name: string;
+    position: string;
+    salary: number;
+    phone: string;
+}
+
+export const staffApi = {
+    getAll: async (): Promise<Staff[]> => {
+        const response = await api.get('/staff');
+        return response.data;
+    },
+    create: async (staff: Omit<Staff, 'id'>): Promise<Staff> => {
+        const response = await api.post('/staff', staff);
+        return response.data;
+    },
+    update: async (id: number, staff: Partial<Staff>): Promise<Staff> => {
+        const response = await api.put(`/staff/${id}`, staff);
+        return response.data;
+    },
+    delete: async (id: number): Promise<void> => {
+        await api.delete(`/staff/${id}`);
+    },
+};
+
+// ============ SUPPLIER PAYMENTS ============
+export interface SupplierPayment {
+    id?: number;
+    supplier_name: string;
+    amount: number;
+    date: string;
+    receipt_url?: string;
+    remarks?: string;
+    status?: string;
+    user_id?: number;
+}
+
+export const supplierPaymentsApi = {
+    getAll: async (): Promise<SupplierPayment[]> => {
+        const response = await api.get('/supplier-payments');
+        return response.data;
+    },
+    create: async (payment: Omit<SupplierPayment, 'id'>): Promise<SupplierPayment> => {
+        const response = await api.post('/supplier-payments', payment);
+        return response.data;
+    },
+    update: async (id: number, payment: Partial<SupplierPayment>): Promise<SupplierPayment> => {
+        const response = await api.put(`/supplier-payments/${id}`, payment);
+        return response.data;
+    },
+    delete: async (id: number): Promise<void> => {
+        await api.delete(`/supplier-payments/${id}`);
+    },
+};
+
+// ============ SALARY PAYMENTS ============
+export interface SalaryPayment {
+    id?: number;
+    staff_id: number;
+    staff_name: string;
+    amount: number;
+    advance: number;
+    paid_month: string;
+    date: string;
+    remarks?: string;
+    status?: string;
+    user_id?: number;
+}
+
+export const salaryPaymentsApi = {
+    getAll: async (): Promise<SalaryPayment[]> => {
+        const response = await api.get('/salary-payments');
+        return response.data;
+    },
+    create: async (payment: Omit<SalaryPayment, 'id'>): Promise<SalaryPayment> => {
+        const response = await api.post('/salary-payments', payment);
+        return response.data;
+    },
+    update: async (id: number, payment: Partial<SalaryPayment>): Promise<SalaryPayment> => {
+        const response = await api.put(`/salary-payments/${id}`, payment);
+        return response.data;
+    },
+    delete: async (id: number): Promise<void> => {
+        await api.delete(`/salary-payments/${id}`);
+    },
+};
+
+// ============ DASHBOARD ============
+export interface DashboardStats {
+    totalSales: number;
+    totalExpenses: number;
+    totalProfit: number;
+    netProfit: number;
+    salesCount: number;
+    expensesCount: number;
+    recentSales: { date: string; total: number }[];
+    recentExpenses: { date: string; total: number }[];
+    salesByCategory: { category: string; total: number }[];
+    expensesByCategory: { category: string; total: number }[];
+}
+
+export const dashboardApi = {
+    getStats: async (): Promise<DashboardStats> => {
+        const response = await api.get('/dashboard/stats');
+        return response.data;
+    },
+};
+
+// Health check for online/offline status
+export const healthApi = {
+    check: async (): Promise<boolean> => {
+        try {
+            await api.get('/health');
+            return true;
+        } catch {
+            return false;
+        }
+    },
+};
+
+export default api;

@@ -1,0 +1,539 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   HAWK TRAVELMATE - Premium Gold Theme
+   ============================================ */
+
+:root {
+  /* Primary Colors - Old Gold/Brown Palette */
+  --primary: #DAA520;
+  --primary-dark: #B8860B;
+  --primary-light: #FFD700;
+  --secondary: #C6930A;
+
+  /* Brown Tones */
+  --dark-brown: #5D4037;
+  --medium-brown: #795548;
+  --light-brown: #8D6E63;
+  --brown-gray: #A1887F;
+
+  /* Semantic Colors */
+  --success: #2e7d32;
+  --success-light: #4caf50;
+  --danger: #c62828;
+  --danger-light: #ef5350;
+  --warning: #f57c00;
+  --info: #1565c0;
+
+  /* Neutrals */
+  --light: #f8f9fa;
+  --light-gray: #f5f5f5;
+  --gray: #9e9e9e;
+  --dark: #212121;
+
+  /* Glass Effects */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(218, 165, 32, 0.2);
+  --shadow-gold: rgba(218, 165, 32, 0.3);
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: linear-gradient(135deg, #faf8f5 0%, #f5f0e8 50%, #ece4d9 100%);
+  color: var(--dark-brown);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--light-gray);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--primary), var(--primary-dark));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-gold {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(218, 165, 32, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 15px rgba(218, 165, 32, 0);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(218, 165, 32, 0.3) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-gold {
+  animation: pulse-gold 2s infinite;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+/* Glassmorphism */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-gold {
+  background: linear-gradient(135deg, rgba(218, 165, 32, 0.1) 0%, rgba(184, 134, 11, 0.05) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(218, 165, 32, 0.3);
+}
+
+/* Premium shadows */
+.shadow-gold {
+  box-shadow:
+    0 4px 6px -1px rgba(218, 165, 32, 0.1),
+    0 2px 4px -1px rgba(218, 165, 32, 0.06),
+    0 0 0 1px rgba(218, 165, 32, 0.05);
+}
+
+.shadow-gold-lg {
+  box-shadow:
+    0 10px 25px -5px rgba(218, 165, 32, 0.2),
+    0 8px 10px -6px rgba(218, 165, 32, 0.1),
+    0 0 0 1px rgba(218, 165, 32, 0.1);
+}
+
+.shadow-gold-hover:hover {
+  box-shadow:
+    0 20px 40px -10px rgba(218, 165, 32, 0.3),
+    0 10px 20px -5px rgba(218, 165, 32, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Gold gradient backgrounds */
+.bg-gold-gradient {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+}
+
+.bg-gold-radial {
+  background: radial-gradient(ellipse at top, var(--primary-light) 0%, var(--primary) 50%, var(--primary-dark) 100%);
+}
+
+.bg-luxury {
+  background: linear-gradient(135deg, var(--dark-brown) 0%, #3E2723 50%, var(--dark-brown) 100%);
+}
+
+/* Text gradients */
+.text-gold-gradient {
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 50%, var(--primary-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================
+   BUTTON STYLES
+   ============================================ */
+
+.btn-gold {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-gold::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.btn-gold:hover::before {
+  left: 100%;
+}
+
+.btn-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -10px rgba(218, 165, 32, 0.5);
+}
+
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   CARD STYLES
+   ============================================ */
+
+.card-premium {
+  background: white;
+  border-radius: 20px;
+  border: 1px solid rgba(218, 165, 32, 0.15);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light), var(--primary));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.card-premium:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 20px 40px -15px rgba(218, 165, 32, 0.2),
+    0 0 0 1px rgba(218, 165, 32, 0.1);
+}
+
+.card-premium:hover::before {
+  opacity: 1;
+}
+
+/* ============================================
+   INPUT STYLES
+   ============================================ */
+
+.input-gold {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.input-gold:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(218, 165, 32, 0.15);
+}
+
+.input-gold:hover:not(:focus) {
+  border-color: var(--primary-light);
+}
+
+/* ============================================
+   TABLE STYLES - Excel-like
+   ============================================ */
+
+.table-excel {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+  font-size: 12px;
+}
+
+.table-excel thead th {
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--primary-dark);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.table-excel tbody tr:nth-child(odd) {
+  background: #fdf9f3;
+}
+
+.table-excel tbody tr:nth-child(even) {
+  background: #fff;
+}
+
+.table-excel tbody td {
+  padding: 8px 12px;
+  border: 1px solid #e0d5c7;
+  transition: background 0.15s;
+}
+
+.table-excel tbody tr:hover td {
+  background: rgba(218, 165, 32, 0.1);
+}
+
+.table-excel td.selected {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background: rgba(218, 165, 32, 0.15) !important;
+}
+
+/* ============================================
+   MODAL STYLES
+   ============================================ */
+
+.modal-overlay {
+  background: rgba(93, 64, 55, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 24px;
+  border: 1px solid rgba(218, 165, 32, 0.2);
+  box-shadow:
+    0 25px 50px -12px rgba(93, 64, 55, 0.25),
+    0 0 0 1px rgba(218, 165, 32, 0.1);
+}
+
+/* ============================================
+   NAVIGATION STYLES
+   ============================================ */
+
+.nav-item {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.nav-item-active {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  box-shadow: 0 4px 15px -3px rgba(218, 165, 32, 0.4);
+}
+
+.nav-item:not(.nav-item-active):hover {
+  background: rgba(218, 165, 32, 0.1);
+  color: var(--primary-dark);
+}
+
+/* Navigation drawer label */
+.nav-drawer-label {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  box-shadow: 0 4px 20px -5px rgba(218, 165, 32, 0.5);
+}
+
+/* ============================================
+   STATS CARD STYLES
+   ============================================ */
+
+.stats-card {
+  background: white;
+  border-radius: 20px;
+  padding: 1.5rem;
+  border: 1px solid rgba(218, 165, 32, 0.1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.stats-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(218, 165, 32, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 20px 40px -15px rgba(218, 165, 32, 0.25);
+}
+
+/* ============================================
+   CLOCK NOTCH STYLES
+   ============================================ */
+
+.clock-notch {
+  background: linear-gradient(180deg, var(--dark-brown) 0%, #3E2723 100%);
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+  box-shadow: 0 4px 20px -5px rgba(93, 64, 55, 0.4);
+}
+
+/* ============================================
+   LOADING STATES
+   ============================================ */
+
+.loading-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+.loading-spinner {
+  border: 3px solid rgba(218, 165, 32, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin-slow 1s linear infinite;
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+  .card-premium {
+    border-radius: 16px;
+  }
+
+  .stats-card {
+    padding: 1rem;
+  }
+}
+
+/* ============================================
+   SELECTION STYLES
+   ============================================ */
+
+::selection {
+  background: rgba(218, 165, 32, 0.3);
+  color: var(--dark-brown);
+}
+
+/* Focus visible for accessibility */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
