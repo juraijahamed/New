@@ -19,7 +19,7 @@ const statusColors: Record<string, { bg: string; text: string; border: string }>
 };
 
 export const StatusSelect: React.FC<StatusSelectProps> = ({ value, onChange, className }) => {
-    const currentStatus = value || '';
+    const currentStatus = value === 'draft' ? '' : (value || '');
     const styles = statusColors[currentStatus] || statusColors['default'];
 
     return (
@@ -27,8 +27,9 @@ export const StatusSelect: React.FC<StatusSelectProps> = ({ value, onChange, cla
             value={currentStatus}
             onChange={(e) => onChange(e.target.value)}
             className={`text-xs font-bold rounded px-1.5 py-1 border shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-opacity-50 ${className}`}
-            style={{ width: '100%', maxWidth: '100%' }}
             style={{
+                width: '100%',
+                maxWidth: '100%',
                 backgroundColor: styles.bg,
                 color: styles.text,
                 borderColor: styles.border,

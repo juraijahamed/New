@@ -48,6 +48,7 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
                 amount: parseFloat(formData.amount),
                 date: formData.date,
                 remarks: formData.remarks,
+                status: 'draft',
             };
 
             if (payment?.id) {

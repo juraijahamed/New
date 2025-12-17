@@ -146,6 +146,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                 date: formData.date,
                 receipt_url: formData.receipt_url,
                 remarks: formData.remarks,
+                status: 'draft',
             };
 
             if (expense?.id) {
@@ -176,6 +177,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                 paid_month: salaryData.paid_month,
                 date: salaryData.date,
                 remarks: salaryData.remarks,
+                status: 'draft',
             };
 
             if (expense && 'staff_name' in expense && expense.id) {
@@ -193,6 +195,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                     category: 'Salary',
                     date: salaryData.date,
                     remarks: salaryData.remarks,
+                    status: 'draft',
                 });
             }
 

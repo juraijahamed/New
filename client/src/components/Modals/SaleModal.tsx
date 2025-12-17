@@ -133,6 +133,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 profit,
                 documents: formData.documents,
                 remarks: formData.remarks,
+                status: 'draft',
             };
 
             if (sale?.id) {

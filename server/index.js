@@ -14,15 +14,23 @@ app.use(express.json());
 const dbPath = path.join(__dirname, 'finance.db');
 console.log('Database path:', dbPath);
 
-// Delete old database to force fresh start (remove this after first successful run)
-if (fs.existsSync(dbPath)) {
-  try {
-    fs.unlinkSync(dbPath);
-    console.log('Deleted old database for fresh start');
-  } catch (e) {
-    console.log('Could not delete old database:', e.message);
-  }
-}
+// DEBUG: Keep process alive and log exits
+process.on('exit', (code) => {
+  console.log(`Server process exiting with code: ${code}`);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+// Heartbeat to keep event loop active
+setInterval(() => {
+  // console.log('Server Heartbeat: Still running...');
+}, 5000);
+
+
+// Database initialized log moved down after initialization
+
 
 const db = new Database(dbPath);
 console.log('Database initialized');
@@ -114,7 +122,7 @@ try {
       db.prepare(`ALTER TABLE ${table} ADD COLUMN status TEXT`).run();
     }
   });
-  
+
   // Migration to add receipt_url to salary_payments if it doesn't exist
   const salaryColumns = db.prepare(`PRAGMA table_info(salary_payments)`).all();
   const hasReceiptUrl = salaryColumns.some(col => col.name === 'receipt_url');
@@ -176,7 +184,7 @@ app.post('/api/expenses', (req, res) => {
       'INSERT INTO expenses (description, amount, category, date, receipt_url, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
     const finalRemarks = (remarks && remarks.trim()) || null;
-    const finalStatus = status || 'pending';
+    const finalStatus = status || '';
     const info = stmt.run(description, amount, category, date, receipt_url || null, finalRemarks, finalStatus, user_id || null);
     res.json({ id: info.lastInsertRowid, ...req.body });
   } catch (error) {
@@ -246,7 +254,7 @@ app.post('/api/sales', (req, res) => {
       'INSERT INTO sales (date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     const calculatedProfit = profit !== undefined ? profit : (sales_rate || 0) - (net_rate || 0);
-    const info = stmt.run(date, agency, supplier, national, passport_number || null, service, net_rate, sales_rate, calculatedProfit, documents || null, (remarks && remarks.trim()) || null, status || 'pending', user_id || null);
+    const info = stmt.run(date, agency, supplier, national, passport_number || null, service, net_rate, sales_rate, calculatedProfit, documents || null, (remarks && remarks.trim()) || null, status || '', user_id || null);
     res.json({ id: info.lastInsertRowid, ...req.body, profit: calculatedProfit });
   } catch (error) {
     console.error('Add sale error:', error);
@@ -376,7 +384,7 @@ app.post('/api/supplier-payments', (req, res) => {
     const stmt = db.prepare(
       'INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
-    const info = stmt.run(supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || 'pending', user_id || null);
+    const info = stmt.run(supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null);
     res.json({ id: info.lastInsertRowid, ...req.body });
   } catch (error) {
     console.error('Add supplier payment error:', error);
@@ -444,7 +452,7 @@ app.post('/api/salary-payments', (req, res) => {
     const stmt = db.prepare(
       'INSERT INTO salary_payments (staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    const info = stmt.run(staff_id, staff_name, amount, advance || 0, paid_month, date, receipt_url || null, (remarks && remarks.trim()) || null, status || 'pending', user_id || null);
+    const info = stmt.run(staff_id, staff_name, amount, advance || 0, paid_month, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null);
     res.json({ id: info.lastInsertRowid, ...req.body });
   } catch (error) {
     console.error('Add salary payment error:', error);
