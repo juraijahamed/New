@@ -150,6 +150,7 @@ export interface SalaryPayment {
     advance: number;
     paid_month: string;
     date: string;
+    receipt_url?: string;
     remarks?: string;
     status?: string;
     user_id?: number;

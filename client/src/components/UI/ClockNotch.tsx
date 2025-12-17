@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, LogOut, Wifi, WifiOff } from 'lucide-react';
+import { ChevronDown, LogOut, WifiOff } from 'lucide-react';
 import { healthApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -12,8 +12,10 @@ const ClockNotch = () => {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [indiaAnalog, setIndiaAnalog] = useState({ h: 0, m: 0, s: 0 });
     const [uaeAnalog, setUaeAnalog] = useState({ h: 0, m: 0, s: 0 });
+    const [leftPosition, setLeftPosition] = useState<string>('50%');
     const { logout, user } = useAuth();
     const navigate = useNavigate();
+    const notchRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const updateClocks = () => {
@@ -52,6 +54,50 @@ const ClockNotch = () => {
         checkOnline();
         const interval = setInterval(checkOnline, 10000);
         return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        const calculateCenter = () => {
+            // Find the main element (the flex-1 main content area)
+            const mainElement = document.querySelector('main.flex-1');
+            if (mainElement) {
+                const mainRect = mainElement.getBoundingClientRect();
+                
+                // Calculate the center point of the main content area
+                // Since we use translateX(-50%), the left position should be the center point
+                const centerX = mainRect.left + (mainRect.width / 2);
+                const newPosition = `${centerX}px`;
+                setLeftPosition(newPosition);
+            }
+        };
+
+        // Calculate on mount and resize
+        calculateCenter();
+        window.addEventListener('resize', calculateCenter);
+        
+        // Also recalculate after a short delay to ensure layout is complete
+        const timeoutId = setTimeout(() => {
+            calculateCenter();
+        }, 100);
+        
+        // Use ResizeObserver for more accurate updates
+        const mainElement = document.querySelector('main.flex-1');
+        let resizeObserver: ResizeObserver | null = null;
+        
+        if (mainElement && 'ResizeObserver' in window) {
+            resizeObserver = new ResizeObserver(() => {
+                calculateCenter();
+            });
+            resizeObserver.observe(mainElement);
+        }
+
+        return () => {
+            window.removeEventListener('resize', calculateCenter);
+            clearTimeout(timeoutId);
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+        };
     }, []);
 
     const handleLogout = () => {
@@ -112,9 +158,13 @@ const ClockNotch = () => {
         <>
             {/* Minimal Top Notch */}
             <motion.div
-                className="fixed top-0 left-1/2 -translate-x-1/2 z-50"
-                initial={{ y: -50 }}
-                animate={{ y: 0 }}
+                ref={notchRef}
+                className="fixed top-0 z-50"
+                style={{
+                    left: leftPosition,
+                }}
+                initial={{ y: -50, x: '-50%' }}
+                animate={{ y: 0, x: '-50%' }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
                 <div
@@ -126,16 +176,22 @@ const ClockNotch = () => {
                     }}
                 >
                     {/* Online Status */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                         {isOnline ? (
-                            <motion.div
-                                className="w-2 h-2 rounded-full"
-                                style={{ background: '#4caf50' }}
-                                animate={{ scale: [1, 1.2, 1] }}
-                                transition={{ duration: 2, repeat: Infinity }}
-                            />
+                            <>
+                                <motion.div
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ background: '#4caf50' }}
+                                    animate={{ scale: [1, 1.2, 1] }}
+                                    transition={{ duration: 2, repeat: Infinity }}
+                                />
+                                <span className="text-[11px] font-medium" style={{ color: '#4caf50' }}>Online</span>
+                            </>
                         ) : (
-                            <WifiOff size={12} className="text-red-400" />
+                            <>
+                                <WifiOff size={12} className="text-red-400" />
+                                <span className="text-[11px] font-medium text-red-400">Offline</span>
+                            </>
                         )}
                     </div>
 
@@ -173,16 +229,18 @@ const ClockNotch = () => {
 
                     {/* User & Logout */}
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] truncate max-w-[60px]" style={{ color: '#A1887F' }}>{user?.name}</span>
+                        <span className="text-[11px] font-medium truncate max-w-[80px]" style={{ color: '#DAA520' }} title={user?.name}>
+                            {user?.name || 'User'}
+                        </span>
                         <motion.button
                             onClick={handleLogout}
-                            className="transition-colors"
+                            className="transition-colors flex items-center gap-1"
                             style={{ color: '#A1887F' }}
                             whileHover={{ color: '#ef5350', scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             title="Logout"
                         >
-                            <LogOut size={12} />
+                            <LogOut size={14} />
                         </motion.button>
                     </div>
                 </div>

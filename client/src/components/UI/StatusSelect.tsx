@@ -26,7 +26,8 @@ export const StatusSelect: React.FC<StatusSelectProps> = ({ value, onChange, cla
         <select
             value={currentStatus}
             onChange={(e) => onChange(e.target.value)}
-            className={`text-xs font-bold rounded px-2 py-1.5 border shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-opacity-50 ${className}`}
+            className={`text-xs font-bold rounded px-1.5 py-1 border shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-opacity-50 ${className}`}
+            style={{ width: '100%', maxWidth: '100%' }}
             style={{
                 backgroundColor: styles.bg,
                 color: styles.text,

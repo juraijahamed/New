@@ -1,38 +1,11 @@
 import { DollarSign, Receipt, PieChart, TrendingUp, Loader2 } from 'lucide-react';
 import StatsCard from '../components/Dashboard/StatsCard';
 import FinancialTrendsChart from '../components/Dashboard/FinancialTrendsChart';
+import TransactionDistributionChart from '../components/Dashboard/TransactionDistributionChart';
 import { useData } from '../context/DataContext';
 
 const Dashboard = () => {
     const { dashboardStats, isLoading, expenses, sales } = useData();
-
-    // Prepare chart data from recent transactions
-    const chartData = (() => {
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const last7Days: { name: string; sales: number; expenses: number }[] = [];
-
-        for (let i = 6; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-
-            const daySales = sales
-                .filter(s => s.date === dateStr)
-                .reduce((sum, s) => sum + (s.sales_rate || 0), 0);
-
-            const dayExpenses = expenses
-                .filter(e => e.date === dateStr)
-                .reduce((sum, e) => sum + (e.amount || 0), 0);
-
-            last7Days.push({
-                name: days[date.getDay()],
-                sales: daySales,
-                expenses: dayExpenses,
-            });
-        }
-
-        return last7Days;
-    })();
 
     if (isLoading) {
         return (
@@ -50,10 +23,6 @@ const Dashboard = () => {
         salesCount: dashboardStats?.salesCount || 0,
         expensesCount: dashboardStats?.expensesCount || 0,
     };
-
-    // Calculate goal progress (example: target 100k sales)
-    const monthlyTarget = 100000;
-    const goalProgress = Math.min((stats.totalSales / monthlyTarget) * 100, 100);
 
     return (
         <div className="p-8 space-y-8">
@@ -95,30 +64,12 @@ const Dashboard = () => {
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 -mt-4">
                 <div className="lg:col-span-2">
-                    <FinancialTrendsChart data={chartData} />
+                    <FinancialTrendsChart sales={sales} expenses={expenses} />
                 </div>
-                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white rounded-2xl p-6 shadow-lg flex flex-col justify-between relative overflow-hidden">
-                    <div className="relative z-10">
-                        <h3 className="text-indigo-100 font-medium mb-1">Monthly Goal</h3>
-                        <div className="text-4xl font-bold mb-4">{goalProgress.toFixed(0)}%</div>
-                        <div className="w-full bg-indigo-900/40 rounded-full h-2 mb-4">
-                            <div
-                                className="bg-white h-2 rounded-full transition-all duration-500"
-                                style={{ width: `${goalProgress}%` }}
-                            />
-                        </div>
-                        <p className="text-sm text-indigo-200">
-                            {goalProgress >= 100
-                                ? '🎉 Goal achieved! Great work!'
-                                : `AED ${(monthlyTarget - stats.totalSales).toLocaleString()} to reach goal`
-                            }
-                        </p>
-                    </div>
-                    {/* Decorative circles */}
-                    <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white opacity-5" />
-                    <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-32 h-32 rounded-full bg-white opacity-5" />
+                <div className="-mt-2">
+                    <TransactionDistributionChart />
                 </div>
             </div>
         </div>

@@ -31,7 +31,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const login = async (name: string) => {
         try {
-            const userData = await authApi.login(name);
+            const response = await authApi.login(name);
+            const userData = response.user || response; // Handle both response formats
             setUser(userData);
             localStorage.setItem('user', JSON.stringify(userData));
         } catch (error) {
