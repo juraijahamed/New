@@ -55,12 +55,19 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
                                 src={fileUrl}
                                 alt="Preview"
                                 className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                }}
                             />
                         ) : isPdf ? (
                             <iframe
                                 src={fileUrl}
                                 className="w-full h-[70vh] bg-white rounded-lg shadow-sm border border-gray-200"
                                 title="PDF Preview"
+                                onError={() => {
+                                    console.error('Failed to load PDF');
+                                }}
                             />
                         ) : (
                             <div className="text-center p-12 bg-white rounded-xl shadow-sm">

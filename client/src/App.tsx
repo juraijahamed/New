@@ -1,7 +1,9 @@
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import Sidebar from './components/Layout/Sidebar';
+import TitleBar from './components/Layout/TitleBar';
 import ClockNotch from './components/UI/ClockNotch';
 import Dashboard from './pages/Dashboard';
 import Expenses from './pages/Expenses';
@@ -10,6 +12,8 @@ import SupplierPayments from './pages/SupplierPayments';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+
+const TITLE_BAR_HEIGHT = 34;
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
@@ -43,6 +47,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 function AppRoutes() {
   const { user } = useAuth();
+  const isElectron = useMemo(() => typeof window !== 'undefined' && Boolean((window as any).electronAPI), []);
+  const topOffset = isElectron ? TITLE_BAR_HEIGHT : 0;
+  const contentPadding = 0;
 
   return (
     <Routes>
@@ -61,14 +68,22 @@ function AppRoutes() {
                 <ClockNotch />
 
                 <Sidebar />
-                <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 pt-12">
+                <main
+                  className="flex-1 overflow-y-auto overflow-x-hidden"
+                  style={{
+                    marginTop: topOffset,
+                    padding: `${contentPadding}px`,
+                    height: `calc(100vh - ${topOffset}px)`
+                  }}
+                >
                   <div
-                    className="h-full rounded-3xl overflow-hidden"
+                    className="h-full overflow-hidden"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.7)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(218, 165, 32, 0.1)',
-                      boxShadow: 'inset 0 2px 10px rgba(218, 165, 32, 0.05)'
+                      background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.78) 100%)',
+                      backdropFilter: 'blur(12px)',
+                      border: '1px solid rgba(218, 165, 32, 0.12)',
+                      boxShadow: '0 16px 48px -20px rgba(62, 39, 35, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45)',
+                      borderRadius: 0
                     }}
                   >
                     <Routes>
@@ -94,6 +109,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <TitleBar />
         <AppRoutes />
       </Router>
     </AuthProvider>

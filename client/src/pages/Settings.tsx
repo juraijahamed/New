@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { UserPlus, Edit2, Trash2, Loader2, Users, Download } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, Loader2, Users, Download, Settings as SettingsIcon } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import Modal from '../components/UI/Modal';
 import ConfirmModal from '../components/UI/ConfirmModal';
@@ -170,14 +170,17 @@ const Settings = () => {
     );
 
     return (
-        <div className="p-8 space-y-8 overflow-auto h-full">
+        <div className="p-[13px] space-y-8 overflow-auto h-full">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+                <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
+                    <SettingsIcon className="text-indigo-600" />
+                    Settings
+                </h1>
                 <p className="text-gray-500 mt-1">Manage your account and application settings.</p>
             </div>
 
             {/* Staff Management Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-sm shadow-sm border border-gray-100 p-6">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-100 rounded-xl">
@@ -187,7 +190,7 @@ const Settings = () => {
                     </div>
                     <button
                         onClick={handleAddNew}
-                        className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all font-medium"
+                        className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-4 py-2 rounded-[10px] flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all font-medium"
                     >
                         <UserPlus size={18} />
                         Add Staff
@@ -199,7 +202,7 @@ const Settings = () => {
                         <Loader2 className="animate-spin text-indigo-600" size={32} />
                     </div>
                 ) : staff.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+                    <div className="flex flex-col items-center justify-center h-32 text-gray-400 rounded-[2px]">
                         <p className="text-lg">No staff members yet</p>
                         <p className="text-sm">Click "Add Staff" to add team members</p>
                     </div>
@@ -211,7 +214,7 @@ const Settings = () => {
             </div>
 
             {/* Data Management Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-[6px] shadow-sm border border-gray-100 p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">Data Management</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">

@@ -63,9 +63,6 @@ const Login = () => {
                         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(218, 165, 32, 0.2)'
                     }}
                 >
-                    {/* Gold accent top */}
-                    <div className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, #DAA520, #FFD700, #DAA520)' }} />
-
                     {/* Logo */}
                     <motion.div
                         className="flex justify-center mb-6"

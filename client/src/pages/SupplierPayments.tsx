@@ -67,6 +67,19 @@ const SupplierPayments = () => {
                 },
             },
             {
+                accessorKey: 'remarks',
+                header: 'Description',
+                cell: (info) => {
+                    const notes = info.getValue() as string;
+                    if (!notes) return <span className="text-gray-300">-</span>;
+                    return (
+                        <span className="text-sm text-gray-600 max-w-xs truncate block" title={notes}>
+                            {notes}
+                        </span>
+                    );
+                },
+            },
+            {
                 accessorKey: 'status',
                 header: 'Remarks',
                 cell: ({ row, getValue }) => (
@@ -84,10 +97,10 @@ const SupplierPayments = () => {
     const totalPayments = supplierPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return (
-        <div className="p-8 h-full flex flex-col">
+        <div className="p-2.5 h-full flex flex-col">
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                    <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
                         <CreditCard className="text-purple-600" />
                         Supplier Payments
                     </h1>
@@ -100,14 +113,14 @@ const SupplierPayments = () => {
                 </div>
                 <button
                     onClick={() => { setSelectedPayment(null); setIsModalOpen(true); }}
-                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all font-medium"
+                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all font-medium"
                 >
                     <PlusCircle size={20} />
                     New Payment
                 </button>
             </div>
 
-            <div className="flex-1 overflow-auto bg-white rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex-1 overflow-auto bg-white rounded-[6px] shadow-sm border border-gray-100">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64">
                         <Loader2 className="animate-spin text-purple-600" size={32} />

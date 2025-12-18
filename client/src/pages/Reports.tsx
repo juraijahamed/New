@@ -70,16 +70,19 @@ const Reports = () => {
 
     if (isLoading) {
         return (
-            <div className="p-8 flex items-center justify-center h-full">
+            <div className="p-[10px] flex items-center justify-center h-full">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="p-8 space-y-8">
+        <div className="p-[10px] space-y-8">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
+                <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
+                    <TrendingUp className="text-indigo-600" />
+                    Reports & Analytics
+                </h1>
                 <p className="text-gray-500 mt-1">Detailed breakdown of your financial activities.</p>
             </div>
 

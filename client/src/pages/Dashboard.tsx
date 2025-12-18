@@ -25,9 +25,12 @@ const Dashboard = () => {
     };
 
     return (
-        <div className="p-8 space-y-8">
+        <div className="p-2.5 space-y-8">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Financial Dashboard</h1>
+                <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
+                    <PieChart className="text-purple-600" />
+                    Financial Dashboard
+                </h1>
                 <p className="text-gray-500 mt-1">Track your financial health and performance.</p>
             </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../UI/Modal';
 import { useData } from '../../context/DataContext';
 import type { Sale } from '../../services/api';
+import { fileUploadApi } from '../../services/api';
 import { Upload, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -59,6 +60,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
         documents: '',
         remarks: '',
     });
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
     const profit = (parseFloat(formData.sales_rate) || 0) - (parseFloat(formData.net_rate) || 0);
 
@@ -108,6 +110,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
             setCustomService('');
             setCustomNationality('');
         }
+        setSelectedFiles([]);
         setError(null);
     }, [sale, isOpen]);
 
@@ -121,6 +124,16 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
         const finalNationality = formData.national === 'Other' ? customNationality : formData.national;
 
         try {
+            let documents = formData.documents;
+            
+            // Upload files if new files are selected
+            if (selectedFiles.length > 0) {
+                const uploadResponse = await fileUploadApi.uploadMultiple(selectedFiles);
+                const filePaths = uploadResponse.files.map(f => f.path);
+                // Store as comma-separated string
+                documents = filePaths.join(',');
+            }
+
             const saleData = {
                 date: formData.date,
                 agency: formData.agency,
@@ -131,7 +144,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 net_rate: parseFloat(formData.net_rate) || 0,
                 sales_rate: parseFloat(formData.sales_rate) || 0,
                 profit,
-                documents: formData.documents,
+                documents: documents,
                 remarks: formData.remarks,
                 status: 'draft',
             };
@@ -141,6 +154,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
             } else {
                 await addSale(saleData);
             }
+            setSelectedFiles([]);
             onClose();
         } catch (err: any) {
             setError(err.message || 'Failed to save sale');
@@ -151,9 +165,22 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setFormData({ ...formData, documents: file.name });
+        const files = Array.from(e.target.files || []);
+        if (files.length > 0) {
+            setSelectedFiles(files);
+            const fileNames = files.map(f => f.name).join(', ');
+            setFormData({ ...formData, documents: fileNames });
+        }
+    };
+
+    const removeFile = (index: number) => {
+        const newFiles = selectedFiles.filter((_, i) => i !== index);
+        setSelectedFiles(newFiles);
+        if (newFiles.length === 0) {
+            setFormData({ ...formData, documents: '' });
+        } else {
+            const fileNames = newFiles.map(f => f.name).join(', ');
+            setFormData({ ...formData, documents: fileNames });
         }
     };
 
@@ -374,33 +401,48 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                     </div>
                 </div>
 
-                {/* Document Upload */}
+                {/* Document Upload - Multiple Files */}
                 <div>
-                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Document (Optional)</label>
-                    <div className="flex items-center gap-2">
+                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Documents (Optional - Multiple files allowed)</label>
+                    <div className="space-y-2">
                         <label
-                            className="flex-1 flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed rounded-xl cursor-pointer transition-all hover:border-amber-500"
+                            className="flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed rounded-xl cursor-pointer transition-all hover:border-amber-500"
                             style={{ borderColor: '#e8ddd0', background: '#fdf9f3' }}
                         >
                             <Upload size={16} style={{ color: '#A1887F' }} />
                             <span className="text-sm" style={{ color: '#8D6E63' }}>
-                                {formData.documents || 'Click to upload receipt/document'}
+                                {selectedFiles.length > 0 
+                                    ? `${selectedFiles.length} file(s) selected` 
+                                    : 'Click to upload documents (multiple files allowed)'}
                             </span>
                             <input
                                 type="file"
                                 className="hidden"
                                 accept=".pdf,.jpg,.jpeg,.png"
+                                multiple
                                 onChange={handleFileChange}
                             />
                         </label>
-                        {formData.documents && (
-                            <button
-                                type="button"
-                                onClick={() => setFormData({ ...formData, documents: '' })}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                            >
-                                <X size={16} />
-                            </button>
+                        {selectedFiles.length > 0 && (
+                            <div className="space-y-1">
+                                {selectedFiles.map((file, index) => (
+                                    <div key={index} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                                        <span className="text-sm text-gray-700 truncate flex-1">{file.name}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeFile(index)}
+                                            className="p-1 text-red-500 hover:bg-red-50 rounded ml-2"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {formData.documents && !selectedFiles.length && (
+                            <div className="text-xs text-gray-500 px-2">
+                                Current: {formData.documents}
+                            </div>
                         )}
                     </div>
                 </div>

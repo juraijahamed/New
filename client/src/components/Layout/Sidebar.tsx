@@ -140,7 +140,8 @@ const Sidebar = () => {
                             background: 'transparent',
                             color: '#A1887F',
                             border: '1px solid rgba(218, 165, 32, 0.4)',
-                            borderRadius: '8px'
+                            borderRadius: '8px',
+                            fontSize: '13px'
                         }}
                         whileHover={{ 
                             backgroundColor: 'rgba(218, 165, 32, 0.1)',

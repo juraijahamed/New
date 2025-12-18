@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, FileText, Globe, Truck, BookUser } from 'lucide-react';
+import { PlusCircle, Loader2, FileText, Globe, Truck, BookUser, BarChart3 } from 'lucide-react';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
 import { useData } from '../context/DataContext';
 import SaleModal from '../components/Modals/SaleModal';
@@ -104,24 +104,32 @@ const Sales = () => {
             },
             {
                 accessorKey: 'documents',
-                header: 'Doc',
+                header: 'Documents',
                 cell: (info) => {
-                    const docPath = info.getValue() as string;
-                    if (!docPath) return <span className="text-gray-300">-</span>;
+                    const docPaths = info.getValue() as string;
+                    if (!docPaths) return <span className="text-gray-300">-</span>;
+                    const files = docPaths.split(',').filter(f => f.trim());
+                    const fileCount = files.length;
                     return (
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setPreviewFile({
-                                    url: `${API_BASE_URL}${docPath}`,
-                                    title: 'Sale Document'
-                                });
+                                // For multiple files, show the first one (we'll enhance this later)
+                                const firstFile = files[0]?.trim();
+                                if (firstFile) {
+                                    setPreviewFile({
+                                        url: `${API_BASE_URL}${firstFile}`,
+                                        title: fileCount > 1 ? `Sale Documents (${fileCount} files)` : 'Sale Document'
+                                    });
+                                }
                             }}
                             className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors group flex items-center gap-1"
-                            title="View Document"
+                            title={fileCount > 1 ? `View ${fileCount} documents` : "View Document"}
                         >
                             <FileText size={16} />
-                            <span className="text-xs font-medium">View</span>
+                            <span className="text-xs font-medium">
+                                {fileCount > 1 ? `${fileCount} files` : 'View'}
+                            </span>
                         </button>
                     );
                 },
@@ -145,10 +153,13 @@ const Sales = () => {
     const totalProfit = sales.reduce((sum, s) => sum + (s.profit || 0), 0);
 
     return (
-        <div className="p-8 h-full flex flex-col">
+        <div className="p-2.5 h-full flex flex-col">
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Sales</h1>
+                    <h1 className="text-3xl font-bold text-left text-[var(--dark-brown)] flex items-center gap-3">
+                        <BarChart3 className="text-green-600" />
+                        Sales
+                    </h1>
                     <p className="text-gray-500 mt-1">
                         Track your revenue and transactions. (Double-click row to edit)
                         <span className="ml-2 font-semibold text-gray-700">
@@ -161,21 +172,21 @@ const Sales = () => {
                 </div>
                 <button
                     onClick={() => { setSelectedSale(null); setIsModalOpen(true); }}
-                    className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
+                    className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
                 >
                     <PlusCircle size={20} />
                     New Sale
                 </button>
             </div>
 
-            <div className="flex-1 overflow-auto bg-white rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex-1 overflow-auto bg-white rounded-md shadow-sm border border-gray-100">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64">
                         <Loader2 className="animate-spin text-green-600" size={32} />
                     </div>
                 ) : sales.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                        <div className="text-6xl mb-4">💰</div>
+                        <div className="text-6xl mb-4">??</div>
                         <p className="text-lg">No sales recorded yet</p>
                         <p className="text-sm">Click "New Sale" to add your first entry</p>
                     </div>

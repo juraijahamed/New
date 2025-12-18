@@ -75,6 +75,19 @@ const Expenses = () => {
                 },
             },
             {
+                accessorKey: 'remarks',
+                header: 'Notes',
+                cell: (info) => {
+                    const notes = info.getValue() as string;
+                    if (!notes) return <span className="text-gray-300">-</span>;
+                    return (
+                        <span className="text-sm text-gray-600 max-w-xs truncate block" title={notes}>
+                            {notes}
+                        </span>
+                    );
+                },
+            },
+            {
                 accessorKey: 'status',
                 header: 'Remarks',
                 cell: ({ row, getValue }) => (
@@ -145,11 +158,14 @@ const Expenses = () => {
     const totalSalaryExpenses = salaryPayments.reduce((sum, e) => sum + (e.amount || 0), 0);
 
     return (
-        <div className="p-6 h-full flex flex-col">
+        <div className="p-2.5 h-full flex flex-col">
             <div className="flex justify-between items-center mb-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
-                    <p className="text-sm text-gray-500">
+                    <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
+                        <Wallet className="text-amber-600" />
+                        Expenses
+                    </h1>
+                    <p className="text-sm text-gray-500 mt-1">
                         General: <span className="font-mono text-red-600">AED {totalGeneralExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                         {' | '}
                         Salaries: <span className="font-mono text-red-600">AED {totalSalaryExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
@@ -157,7 +173,7 @@ const Expenses = () => {
                 </div>
                 <button
                     onClick={() => { setSelectedExpense(null); setIsModalOpen(true); }}
-                    className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all text-sm font-medium"
+                    className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-4 py-2 rounded-[10px] flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all text-sm font-medium"
                 >
                     <PlusCircle size={18} />
                     New Entry
@@ -188,7 +204,7 @@ const Expenses = () => {
                 </button>
             </div>
 
-            <div className="flex-1 overflow-auto bg-white rounded-xl border border-gray-200">
+            <div className="flex-1 overflow-auto bg-white rounded-[6px] border border-gray-200">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64">
                         <Loader2 className="animate-spin text-amber-600" size={32} />

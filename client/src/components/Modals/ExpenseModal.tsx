@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../UI/Modal';
 import { useData } from '../../context/DataContext';
 import type { Expense, SalaryPayment } from '../../services/api';
+import { fileUploadApi } from '../../services/api';
 import { Upload, X, Receipt, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -38,6 +39,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
         receipt_url: '',
         remarks: '',
     });
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     const [salaryData, setSalaryData] = useState({
         staff_id: '',
@@ -128,6 +130,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
             });
             setActiveTab('general');
         }
+        setSelectedFile(null);
         setError(null);
     }, [expense, isOpen]);
 
@@ -139,12 +142,29 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
         const finalCategory = formData.category === 'Other' ? customCategory : formData.category;
 
         try {
+            let receiptUrl = formData.receipt_url;
+            
+            // Upload file if a new file is selected
+            if (selectedFile) {
+                try {
+                    const uploadResponse = await fileUploadApi.uploadSingle(selectedFile);
+                    receiptUrl = uploadResponse.path;
+                } catch (uploadError: any) {
+                    const errorMessage = uploadError.response?.status === 404 
+                        ? 'File upload endpoint not found. Please restart the server.'
+                        : uploadError.message || 'Failed to upload file';
+                    setError(errorMessage);
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
             const expenseData = {
                 description: formData.description,
                 amount: parseFloat(formData.amount),
                 category: finalCategory,
                 date: formData.date,
-                receipt_url: formData.receipt_url,
+                receipt_url: receiptUrl,
                 remarks: formData.remarks,
                 status: 'draft',
             };
@@ -154,6 +174,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
             } else {
                 await addExpense(expenseData);
             }
+            setSelectedFile(null);
             onClose();
         } catch (err: any) {
             setError(err.message || 'Failed to save expense');
@@ -210,6 +231,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            setSelectedFile(file);
             setFormData({ ...formData, receipt_url: file.name });
         }
     };
@@ -390,7 +412,10 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                             {formData.receipt_url && (
                                 <button
                                     type="button"
-                                    onClick={() => setFormData({ ...formData, receipt_url: '' })}
+                                    onClick={() => {
+                                        setFormData({ ...formData, receipt_url: '' });
+                                        setSelectedFile(null);
+                                    }}
                                     className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
                                 >
                                     <X size={16} />

@@ -207,4 +207,65 @@ export const healthApi = {
     },
 };
 
+// ============ FILE UPLOAD ============
+export interface UploadResponse {
+    filename: string;
+    originalName: string;
+    path: string;
+}
+
+export interface MultipleUploadResponse {
+    files: UploadResponse[];
+}
+
+export const fileUploadApi = {
+    uploadSingle: async (file: File): Promise<UploadResponse> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            // Use axios directly (not the api instance) to avoid JSON Content-Type header
+            // Don't set Content-Type - axios will set it automatically with boundary for FormData
+            const response = await axios.post(`${API_URL}/upload`, formData);
+            return response.data;
+        } catch (error: any) {
+            console.error('File upload error:', error);
+            console.error('Error details:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                url: error.config?.url
+            });
+            const errorMessage = error.response?.status === 404 
+                ? 'Upload endpoint not found. Please ensure the server is running and has the /api/upload endpoint. Check server console for errors.'
+                : error.response?.data?.error || error.message || 'Failed to upload file';
+            throw new Error(errorMessage);
+        }
+    },
+    uploadMultiple: async (files: File[]): Promise<MultipleUploadResponse> => {
+        const formData = new FormData();
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+        try {
+            // Use axios directly (not the api instance) to avoid JSON Content-Type header
+            // Don't set Content-Type - axios will set it automatically with boundary for FormData
+            const response = await axios.post(`${API_URL}/upload-multiple`, formData);
+            return response.data;
+        } catch (error: any) {
+            console.error('Multiple file upload error:', error);
+            console.error('Error details:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                url: error.config?.url
+            });
+            const errorMessage = error.response?.status === 404 
+                ? 'Upload endpoint not found. Please ensure the server is running and has the /api/upload-multiple endpoint. Check server console for errors.'
+                : error.response?.data?.error || error.message || 'Failed to upload files';
+            throw new Error(errorMessage);
+        }
+    },
+};
+
 export default api;
+

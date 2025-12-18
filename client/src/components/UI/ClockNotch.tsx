@@ -162,6 +162,7 @@ const ClockNotch = () => {
                 className="fixed top-0 z-50"
                 style={{
                     left: leftPosition,
+                    WebkitAppRegion: 'drag',
                 }}
                 initial={{ y: -50, x: '-50%' }}
                 animate={{ y: 0, x: '-50%' }}
@@ -172,7 +173,8 @@ const ClockNotch = () => {
                     style={{
                         background: 'linear-gradient(180deg, #5D4037 0%, #3E2723 100%)',
                         boxShadow: '0 4px 20px -5px rgba(93, 64, 55, 0.5)',
-                        borderBottom: '1px solid rgba(218, 165, 32, 0.3)'
+                        borderBottom: '1px solid rgba(218, 165, 32, 0.3)',
+                        WebkitAppRegion: 'no-drag',
                     }}
                 >
                     {/* Online Status */}

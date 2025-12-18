@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import Modal from '../UI/Modal';
 import { useData } from '../../context/DataContext';
 import type { SupplierPayment } from '../../services/api';
+import { fileUploadApi } from '../../services/api';
+import { Upload, X } from 'lucide-react';
 
 interface SupplierPaymentModalProps {
     isOpen: boolean;
@@ -12,11 +14,13 @@ interface SupplierPaymentModalProps {
 const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onClose, payment }) => {
     const { addSupplierPayment, updateSupplierPayment } = useData();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     const [formData, setFormData] = useState({
         supplier_name: '',
         amount: '',
         date: new Date().toISOString().split('T')[0],
+        receipt_url: '',
         remarks: '',
     });
 
@@ -26,6 +30,7 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
                 supplier_name: payment.supplier_name || '',
                 amount: String(payment.amount || ''),
                 date: payment.date || new Date().toISOString().split('T')[0],
+                receipt_url: payment.receipt_url || '',
                 remarks: payment.remarks || '',
             });
         } else {
@@ -33,9 +38,11 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
                 supplier_name: '',
                 amount: '',
                 date: new Date().toISOString().split('T')[0],
+                receipt_url: '',
                 remarks: '',
             });
         }
+        setSelectedFile(null);
     }, [payment, isOpen]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -43,10 +50,19 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
         setIsSubmitting(true);
 
         try {
+            let receiptUrl = formData.receipt_url;
+            
+            // Upload file if a new file is selected
+            if (selectedFile) {
+                const uploadResponse = await fileUploadApi.uploadSingle(selectedFile);
+                receiptUrl = uploadResponse.path;
+            }
+
             const paymentData = {
                 supplier_name: formData.supplier_name,
                 amount: parseFloat(formData.amount),
                 date: formData.date,
+                receipt_url: receiptUrl,
                 remarks: formData.remarks,
                 status: 'draft',
             };
@@ -56,6 +72,7 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
             } else {
                 await addSupplierPayment(paymentData);
             }
+            setSelectedFile(null);
             onClose();
         } catch (error) {
             console.error('Error saving payment:', error);
@@ -103,6 +120,45 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
                             onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50/50"
                         />
+                    </div>
+                </div>
+
+                {/* Receipt Upload */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Receipt (Optional)</label>
+                    <div className="flex items-center gap-2">
+                        <label
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer transition-all bg-gray-50/50 hover:bg-gray-100/50"
+                        >
+                            <Upload size={16} className="text-gray-500" />
+                            <span className="text-sm text-gray-600">
+                                {formData.receipt_url || 'Click to upload receipt'}
+                            </span>
+                            <input
+                                type="file"
+                                className="hidden"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        setSelectedFile(file);
+                                        setFormData({ ...formData, receipt_url: file.name });
+                                    }
+                                }}
+                            />
+                        </label>
+                        {formData.receipt_url && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setFormData({ ...formData, receipt_url: '' });
+                                    setSelectedFile(null);
+                                }}
+                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
                     </div>
                 </div>
 

@@ -3,12 +3,38 @@ const cors = require('cors');
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
 const app = express();
 const port = 3001;
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(uploadsDir));
 
 // Database Setup - Use absolute path to ensure consistency
 const dbPath = path.join(__dirname, 'finance.db');
@@ -503,6 +529,46 @@ app.delete('/api/salary-payments/:id', (req, res) => {
   }
 });
 
+// ============ FILE UPLOAD ============
+app.post('/api/upload', upload.single('file'), (req, res) => {
+  try {
+    console.log('Upload endpoint hit');
+    console.log('Request file:', req.file);
+    if (!req.file) {
+      console.log('No file in request');
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const response = { 
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      path: `/uploads/${req.file.filename}`
+    };
+    console.log('Upload successful:', response);
+    res.json(response);
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Multiple file upload endpoint
+app.post('/api/upload-multiple', upload.array('files', 10), (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+    const files = req.files.map(file => ({
+      filename: file.filename,
+      originalName: file.originalname,
+      path: `/uploads/${file.filename}`
+    }));
+    res.json({ files });
+  } catch (error) {
+    console.error('Multiple file upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ DASHBOARD STATS ============
 app.get('/api/dashboard/stats', (req, res) => {
   try {
@@ -530,7 +596,14 @@ app.get('/api/dashboard/stats', (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
+
 // Start Server
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
+  console.log(`Upload endpoint available at http://localhost:${port}/api/upload`);
+  console.log(`Uploads directory: ${uploadsDir}`);
 });
