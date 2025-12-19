@@ -1,24 +1,95 @@
-import React from 'react';
-import { X, ExternalLink, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Download, Edit, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Toast } from '../UI/Toast';
 
 interface FilePreviewModalProps {
     isOpen: boolean;
     onClose: () => void;
     fileUrl?: string; // This expects a full URL (http://localhost:3001/uploads/...)
     title?: string;
+    onEdit?: () => void;
+    onRemove?: () => void;
+    onDownload?: () => void;
 }
 
-const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fileUrl, title = 'File Preview' }) => {
+const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    fileUrl, 
+    title = 'File Preview',
+    onEdit,
+    onRemove,
+    onDownload
+}) => {
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+
+    // Handle Escape key to close modal
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [isOpen, onClose]);
+
     if (!isOpen || !fileUrl) return null;
+
+    const handleDownload = async () => {
+        if (onDownload) {
+            onDownload();
+            return;
+        }
+
+        try {
+            // Fetch the file as a blob to force download
+            const response = await fetch(fileUrl);
+            if (!response.ok) throw new Error('Failed to fetch file');
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            
+            // Extract filename from URL
+            const filename = fileUrl.split('/').pop() || 'file';
+            link.download = filename;
+            
+            // Force download
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up the blob URL
+            window.URL.revokeObjectURL(url);
+            
+            // Show success notification
+            setToastMessage(`File downloaded: ${filename}`);
+            setShowToast(true);
+        } catch (error) {
+            console.error('Download error:', error);
+            setToastMessage('Failed to download file');
+            setShowToast(true);
+        }
+    };
 
     const isImage = fileUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i);
     const isPdf = fileUrl.match(/\.pdf$/i);
 
     return (
-        <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                onClick={onClose}>
+        <>
+            <Toast
+                message={toastMessage}
+                isVisible={showToast}
+                onClose={() => setShowToast(false)}
+            />
+            <AnimatePresence>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    onClick={onClose}>
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -31,18 +102,40 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
                             {title}
                         </h3>
                         <div className="flex items-center gap-2">
-                            <a
-                                href={fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-blue-600 transition-colors"
-                                title="Open in new tab"
+                            {onEdit && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEdit();
+                                    }}
+                                    className="p-2 hover:bg-blue-50 rounded-full text-gray-500 hover:text-blue-600 transition-colors"
+                                    title="Edit document"
+                                >
+                                    <Edit size={20} />
+                                </button>
+                            )}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownload();
+                                }}
+                                className="p-2 hover:bg-green-50 rounded-full text-gray-500 hover:text-green-600 transition-colors"
+                                title="Download"
                             >
-                                <ExternalLink size={20} />
-                            </a>
+                                <Download size={20} />
+                            </button>
+                            {onRemove && (
+                                <button
+                                    onClick={onRemove}
+                                    className="p-2 hover:bg-red-50 rounded-full text-gray-500 hover:text-red-500 transition-colors"
+                                    title="Remove document"
+                                >
+                                    <Trash2 size={20} />
+                                </button>
+                            )}
                             <button
                                 onClick={onClose}
-                                className="p-2 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+                                className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"
                             >
                                 <X size={20} />
                             </button>
@@ -59,6 +152,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
                                     const target = e.target as HTMLImageElement;
                                     target.style.display = 'none';
                                 }}
+                                onClick={(e) => e.stopPropagation()}
                             />
                         ) : isPdf ? (
                             <iframe
@@ -76,21 +170,23 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
                                 </div>
                                 <h4 className="text-lg font-medium text-gray-900 mb-2">File type not supported for preview</h4>
                                 <p className="text-gray-500 mb-6">You can download or view this file externally.</p>
-                                <a
-                                    href={fileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownload();
+                                    }}
                                     className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium shadow-lg shadow-blue-500/25"
                                 >
                                     <Download size={18} />
                                     Download File
-                                </a>
+                                </button>
                             </div>
                         )}
                     </div>
                 </motion.div>
             </div>
         </AnimatePresence>
+        </>
     );
 };
 

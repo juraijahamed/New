@@ -207,6 +207,38 @@ export const healthApi = {
     },
 };
 
+// ============ DROPDOWN OPTIONS ============
+export interface DropdownOption {
+    id?: number;
+    type: string;
+    value: string;
+    display_order?: number;
+    color?: string;
+    table_type?: string;
+}
+
+export const dropdownOptionsApi = {
+    getAll: async (type?: string, table_type?: string): Promise<DropdownOption[]> => {
+        const params = new URLSearchParams();
+        if (type) params.append('type', type);
+        if (table_type) params.append('table_type', table_type);
+        const queryString = params.toString();
+        const response = await api.get(`/dropdown-options${queryString ? `?${queryString}` : ''}`);
+        return response.data;
+    },
+    create: async (option: Omit<DropdownOption, 'id'>): Promise<DropdownOption> => {
+        const response = await api.post('/dropdown-options', option);
+        return response.data;
+    },
+    update: async (id: number, option: Partial<DropdownOption>): Promise<DropdownOption> => {
+        const response = await api.put(`/dropdown-options/${id}`, option);
+        return response.data;
+    },
+    delete: async (id: number): Promise<void> => {
+        await api.delete(`/dropdown-options/${id}`);
+    },
+};
+
 // ============ FILE UPLOAD ============
 export interface UploadResponse {
     filename: string;

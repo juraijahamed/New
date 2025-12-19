@@ -1,19 +1,24 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, Receipt, Wallet, FileText } from 'lucide-react';
+import { PlusCircle, Loader2, Receipt, Wallet } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import ExpenseModal from '../components/Modals/ExpenseModal';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
 import { StatusSelect } from '../components/UI/StatusSelect';
+import { EditableCell } from '../components/UI/EditableCell';
+import { DocumentCell } from '../components/UI/DocumentCell';
+import { Toast } from '../components/UI/Toast';
 import type { Expense, SalaryPayment } from '../services/api';
 
 const Expenses = () => {
     const { expenses, salaryPayments, isLoading, updateExpense, updateSalaryPayment } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<Expense | SalaryPayment | null>(null);
-    const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ url: string; title: string; expenseId?: number; isSalary?: boolean } | null>(null);
     const [activeTab, setActiveTab] = useState<'general' | 'salary'>('general');
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
 
     const API_BASE_URL = 'http://localhost:3001';
 
@@ -29,63 +34,109 @@ const Expenses = () => {
     const expenseColumns = useMemo<ColumnDef<Expense>[]>(
         () => [
             {
+                accessorKey: 'id',
+                header: 'ID',
+                cell: ({ row }) => (
+                    <div 
+                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        onClick={(e) => {
+                            // Allow single clicks to bubble up for cell selection
+                        }}
+                        onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(row.original);
+                        }}
+                        title="Double-click to open edit form"
+                    >
+                        {row.original.id || '-'}
+                    </div>
+                ),
+            },
+            {
                 accessorKey: 'date',
                 header: 'Date',
-                cell: (info) => new Date(info.getValue() as string).toLocaleDateString('en-GB'),
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.date}
+                        onSave={async (val) => {
+                            await updateExpense(row.original.id!, { date: val as string });
+                        }}
+                        type="date"
+                        formatDisplay={(val) => new Date(val as string).toLocaleDateString('en-GB')}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'description',
                 header: 'Description',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.description}
+                        onSave={async (val) => {
+                            await updateExpense(row.original.id!, { description: val as string });
+                        }}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'category',
                 header: 'Category',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.category}
+                        onSave={async (val) => {
+                            await updateExpense(row.original.id!, { category: val as string });
+                        }}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'amount',
                 header: 'Amount (AED)',
-                cell: (info) => (
-                    <span className="font-mono text-red-600">
-                        {((info.getValue() as number) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.amount}
+                        onSave={async (val) => {
+                            await updateExpense(row.original.id!, { amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => (val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        className="font-mono text-red-600 text-xs"
+                    />
                 ),
             },
             {
                 accessorKey: 'receipt_url',
                 header: 'Receipt',
-                cell: (info) => {
-                    const docPath = info.getValue() as string;
-                    if (!docPath) return <span className="text-gray-300">-</span>;
-                    return (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewFile({
-                                    url: `${API_BASE_URL}${docPath}`,
-                                    title: 'Expense Receipt'
-                                });
-                            }}
-                            className="p-1.5 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors group flex items-center gap-1"
-                            title="View Receipt"
-                        >
-                            <FileText size={16} />
-                            <span className="text-xs font-medium">View</span>
-                        </button>
-                    );
-                },
+                cell: ({ row }) => (
+                    <DocumentCell
+                        value={row.original.receipt_url}
+                        onUpdate={async (receipt_url) => {
+                            await updateExpense(row.original.id!, { receipt_url });
+                        }}
+                        apiBaseUrl={API_BASE_URL}
+                        onPreview={(url, title) => {
+                            setPreviewFile({ url, title, expenseId: row.original.id, isSalary: false });
+                        }}
+                        multiple={false}
+                    />
+                ),
             },
             {
                 accessorKey: 'remarks',
                 header: 'Notes',
-                cell: (info) => {
-                    const notes = info.getValue() as string;
-                    if (!notes) return <span className="text-gray-300">-</span>;
-                    return (
-                        <span className="text-sm text-gray-600 max-w-xs truncate block" title={notes}>
-                            {notes}
-                        </span>
-                    );
-                },
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.remarks}
+                        onSave={async (val) => {
+                            await updateExpense(row.original.id!, { remarks: val as string });
+                        }}
+                        className="text-xs text-gray-600"
+                    />
+                ),
             },
             {
                 accessorKey: 'status',
@@ -104,39 +155,105 @@ const Expenses = () => {
     const salaryColumns = useMemo<ColumnDef<SalaryPayment>[]>(
         () => [
             {
+                accessorKey: 'id',
+                header: 'ID',
+                cell: ({ row }) => (
+                    <div 
+                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        onClick={(e) => {
+                            // Allow single clicks to bubble up for cell selection
+                        }}
+                        onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(row.original);
+                        }}
+                        title="Double-click to open edit form"
+                    >
+                        {row.original.id || '-'}
+                    </div>
+                ),
+            },
+            {
                 accessorKey: 'date',
                 header: 'Payment Date',
-                cell: (info) => new Date(info.getValue() as string).toLocaleDateString('en-GB'),
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.date}
+                        onSave={async (val) => {
+                            await updateSalaryPayment(row.original.id!, { date: val as string });
+                        }}
+                        type="date"
+                        formatDisplay={(val) => new Date(val as string).toLocaleDateString('en-GB')}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'staff_name',
                 header: 'Staff Name',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.staff_name}
+                        onSave={async (val) => {
+                            await updateSalaryPayment(row.original.id!, { staff_name: val as string });
+                        }}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'paid_month',
                 header: 'Month',
-                cell: (info) => {
-                    const val = info.getValue() as string;
-                    const date = new Date(val + '-01');
-                    return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-                },
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.paid_month}
+                        onSave={async (val) => {
+                            await updateSalaryPayment(row.original.id!, { paid_month: val as string });
+                        }}
+                        type="date"
+                        formatDisplay={(val) => {
+                            const date = new Date((val as string) + '-01');
+                            return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+                        }}
+                        parseValue={(val) => {
+                            // Convert date input to YYYY-MM format
+                            if (val.includes('-')) {
+                                return val.substring(0, 7);
+                            }
+                            return val;
+                        }}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'amount',
                 header: 'Salary (AED)',
-                cell: (info) => (
-                    <span className="font-mono text-red-600">
-                        {(info.getValue() as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.amount}
+                        onSave={async (val) => {
+                            await updateSalaryPayment(row.original.id!, { amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => (val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        className="font-mono text-red-600 text-xs"
+                    />
                 ),
             },
             {
                 accessorKey: 'advance',
                 header: 'Advance (AED)',
-                cell: (info) => (
-                    <span className="font-mono text-orange-600">
-                        {((info.getValue() as number) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.advance}
+                        onSave={async (val) => {
+                            await updateSalaryPayment(row.original.id!, { advance: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => ((val as number) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        className="font-mono text-orange-600 text-xs"
+                    />
                 ),
             },
             {
@@ -156,9 +273,16 @@ const Expenses = () => {
     // Calculate totals
     const totalGeneralExpenses = generalExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalSalaryExpenses = salaryPayments.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalExpenses = totalGeneralExpenses + totalSalaryExpenses;
 
     return (
-        <div className="p-2.5 h-full flex flex-col">
+        <>
+            <Toast
+                message={toastMessage}
+                isVisible={showToast}
+                onClose={() => setShowToast(false)}
+            />
+            <div className="p-2.5 h-full flex flex-col">
             <div className="flex justify-between items-center mb-4">
                 <div>
                     <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
@@ -171,13 +295,21 @@ const Expenses = () => {
                         Salaries: <span className="font-mono text-red-600">AED {totalSalaryExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </p>
                 </div>
-                <button
-                    onClick={() => { setSelectedExpense(null); setIsModalOpen(true); }}
-                    className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-4 py-2 rounded-[10px] flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all text-sm font-medium"
-                >
-                    <PlusCircle size={18} />
-                    New Entry
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="bg-white rounded-lg px-4 py-2.5 border border-amber-200 shadow-sm">
+                        <p className="text-xs text-gray-500 mb-0.5">Total Expenses</p>
+                        <p className="text-lg font-bold text-red-600 font-mono">
+                            AED {totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => { setSelectedExpense(null); setIsModalOpen(true); }}
+                        className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-4 py-2 rounded-[10px] flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all text-sm font-medium"
+                    >
+                        <PlusCircle size={18} />
+                        New Entry
+                    </button>
+                </div>
             </div>
 
             {/* Tabs */}
@@ -216,7 +348,7 @@ const Expenses = () => {
                             <p>No expenses recorded</p>
                         </div>
                     ) : (
-                        <DataTable columns={expenseColumns} data={generalExpenses} onEdit={handleEdit} />
+                        <DataTable columns={expenseColumns} data={generalExpenses} />
                     )
                 ) : (
                     salaryPayments.length === 0 ? (
@@ -225,7 +357,7 @@ const Expenses = () => {
                             <p>No salary payments recorded</p>
                         </div>
                     ) : (
-                        <DataTable columns={salaryColumns} data={salaryPayments} onEdit={handleEdit} />
+                        <DataTable columns={salaryColumns} data={salaryPayments} />
                     )
                 )}
             </div>
@@ -242,8 +374,52 @@ const Expenses = () => {
                 onClose={() => setPreviewFile(null)}
                 fileUrl={previewFile?.url}
                 title={previewFile?.title}
+                onEdit={() => {
+                    if (previewFile?.expenseId && !previewFile.isSalary) {
+                        const expense = expenses.find(e => e.id === previewFile.expenseId);
+                        if (expense) {
+                            setSelectedExpense(expense);
+                            setIsModalOpen(true);
+                            setPreviewFile(null);
+                        }
+                    }
+                }}
+                onRemove={async () => {
+                    if (previewFile?.expenseId && !previewFile.isSalary) {
+                        await updateExpense(previewFile.expenseId, { receipt_url: '' });
+                        setPreviewFile(null);
+                    }
+                }}
+                onDownload={async () => {
+                    if (previewFile?.url) {
+                        try {
+                            const response = await fetch(previewFile.url);
+                            if (!response.ok) throw new Error('Failed to fetch file');
+                            
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            const filename = previewFile.url.split('/').pop() || 'file';
+                            link.download = filename;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                            
+                            setToastMessage(`File downloaded: ${filename}`);
+                            setShowToast(true);
+                        } catch (error) {
+                            console.error('Download error:', error);
+                            setToastMessage('Failed to download file');
+                            setShowToast(true);
+                        }
+                    }
+                }}
             />
         </div>
+        </>
     );
 };
 

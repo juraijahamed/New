@@ -1,9 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const { pool, initSchema } = require('./db');
 const app = express();
 const port = 3001;
 
@@ -36,190 +36,80 @@ app.use(express.json());
 // Serve static files from uploads directory
 app.use('/uploads', express.static(uploadsDir));
 
-// Database Setup - Use absolute path to ensure consistency
-const dbPath = path.join(__dirname, 'finance.db');
-console.log('Database path:', dbPath);
+async function start() {
+  // Initialize DB schema in Postgres
+  await initSchema();
+  console.log('Postgres schema initialized successfully');
 
-// DEBUG: Keep process alive and log exits
-process.on('exit', (code) => {
-  console.log(`Server process exiting with code: ${code}`);
-});
+  // ============ ROUTES ============
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
-
-// Heartbeat to keep event loop active
-setInterval(() => {
-  // console.log('Server Heartbeat: Still running...');
-}, 5000);
-
-
-// Database initialized log moved down after initialization
-
-
-const db = new Database(dbPath);
-console.log('Database initialized');
-
-// Initialize Schema
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE,
-    role TEXT DEFAULT 'staff'
-  );
-
-  CREATE TABLE IF NOT EXISTS expenses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    description TEXT,
-    amount REAL,
-    category TEXT,
-    date TEXT,
-    receipt_url TEXT,
-    remarks TEXT,
-    status TEXT,
-    user_id INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS sales (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT,
-    agency TEXT,
-    supplier TEXT,
-    national TEXT,
-    service TEXT,
-    net_rate REAL,
-    sales_rate REAL,
-    profit REAL,
-    passport_number TEXT,
-    documents TEXT,
-    remarks TEXT,
-    status TEXT,
-    user_id INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS staff (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    position TEXT,
-    salary REAL,
-    phone TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS supplier_payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    supplier_name TEXT NOT NULL,
-    amount REAL NOT NULL,
-    date TEXT NOT NULL,
-    receipt_url TEXT,
-    remarks TEXT,
-    status TEXT,
-    user_id INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS salary_payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    staff_id INTEGER NOT NULL,
-    staff_name TEXT,
-    amount REAL NOT NULL,
-    advance REAL DEFAULT 0,
-    paid_month TEXT NOT NULL,
-    date TEXT NOT NULL,
-    receipt_url TEXT,
-    remarks TEXT,
-    status TEXT,
-    user_id INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-
-// Migration to add status column if it doesn't exist (for existing tables)
-try {
-  const tables = ['expenses', 'sales', 'supplier_payments', 'salary_payments'];
-  tables.forEach(table => {
-    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
-    const hasStatus = columns.some(col => col.name === 'status');
-    if (!hasStatus) {
-      console.log(`Adding status column to ${table}...`);
-      db.prepare(`ALTER TABLE ${table} ADD COLUMN status TEXT`).run();
+  // Health Check
+  app.get('/api/health', async (req, res) => {
+    try {
+      await pool.query('SELECT 1');
+      res.json({ status: 'ok', time: new Date().toISOString() });
+    } catch (error) {
+      res.status(500).json({ status: 'error', error: error.message });
     }
   });
 
-  // Migration to add receipt_url to salary_payments if it doesn't exist
-  const salaryColumns = db.prepare(`PRAGMA table_info(salary_payments)`).all();
-  const hasReceiptUrl = salaryColumns.some(col => col.name === 'receipt_url');
-  if (!hasReceiptUrl) {
-    console.log('Adding receipt_url column to salary_payments...');
-    db.prepare(`ALTER TABLE salary_payments ADD COLUMN receipt_url TEXT`).run();
-  }
-} catch (error) {
-  console.error('Migration error:', error);
-}
-
-console.log('Schema initialized successfully');
-
-// ============ ROUTES ============
-
-// Health Check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
-});
-
-// ============ AUTH ============
-app.post('/api/login', (req, res) => {
-  const { name } = req.body;
-  if (!name || !name.trim()) {
-    return res.status(400).json({ error: 'Name is required' });
-  }
-
-  try {
-    const trimmedName = name.trim();
-    let user = db.prepare('SELECT * FROM users WHERE name = ?').get(trimmedName);
-
-    if (!user) {
-      const info = db.prepare('INSERT INTO users (name) VALUES (?)').run(trimmedName);
-      user = { id: info.lastInsertRowid, name: trimmedName, role: 'staff' };
+  // ============ AUTH ============
+  app.post('/api/login', async (req, res) => {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required' });
     }
 
-    res.json({ user });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+    try {
+      const trimmedName = name.trim();
+      const existing = await pool.query('SELECT * FROM users WHERE name = $1', [trimmedName]);
+      let user = existing.rows[0];
+
+      if (!user) {
+        const inserted = await pool.query(
+          'INSERT INTO users (name) VALUES ($1) RETURNING *',
+          [trimmedName]
+        );
+        user = inserted.rows[0];
+      }
+
+      res.json({ user });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
 // ============ EXPENSES ============
-app.get('/api/expenses', (req, res) => {
+app.get('/api/expenses', async (req, res) => {
   try {
-    const expenses = db.prepare('SELECT * FROM expenses ORDER BY date DESC').all();
-    res.json(expenses);
+    const result = await pool.query('SELECT * FROM expenses ORDER BY date DESC');
+    res.json(result.rows);
   } catch (error) {
     console.error('Get expenses error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/expenses', (req, res) => {
+app.post('/api/expenses', async (req, res) => {
   const { description, amount, category, date, receipt_url, remarks, status, user_id } = req.body;
   try {
-    const stmt = db.prepare(
-      'INSERT INTO expenses (description, amount, category, date, receipt_url, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    );
     const finalRemarks = (remarks && remarks.trim()) || null;
     const finalStatus = status || '';
-    const info = stmt.run(description, amount, category, date, receipt_url || null, finalRemarks, finalStatus, user_id || null);
-    res.json({ id: info.lastInsertRowid, ...req.body });
+    const inserted = await pool.query(
+      `INSERT INTO expenses (description, amount, category, date, receipt_url, remarks, status, user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+      [description, amount, category, date, receipt_url || null, finalRemarks, finalStatus, user_id || null]
+    );
+    res.json(inserted.rows[0]);
   } catch (error) {
     console.error('Add expense error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.put('/api/expenses/:id', (req, res) => {
+app.put('/api/expenses/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const validFields = ['description', 'amount', 'category', 'date', 'receipt_url', 'remarks', 'status'];
@@ -232,29 +122,28 @@ app.put('/api/expenses/:id', (req, res) => {
       return res.json({ id: Number(id), ...updates });
     }
 
-    const setClause = fieldsToUpdate.map(field => `${field} = ?`).join(', ');
+    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
     const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') {
-        return (updates[field] && updates[field].trim()) || null;
-      }
+      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
+      if (field === 'receipt_url') return updates[field] || null;
       return updates[field];
     });
     values.push(id);
-
-    const stmt = db.prepare(`UPDATE expenses SET ${setClause} WHERE id = ?`);
-    stmt.run(...values);
-
-    res.json({ id: Number(id), ...updates });
+    const updated = await pool.query(
+      `UPDATE expenses SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    res.json(updated.rows[0] || { id: Number(id), ...updates });
   } catch (error) {
     console.error('Update expense error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/expenses/:id', (req, res) => {
+app.delete('/api/expenses/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
+    await pool.query('DELETE FROM expenses WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete expense error:', error);
@@ -263,32 +152,48 @@ app.delete('/api/expenses/:id', (req, res) => {
 });
 
 // ============ SALES ============
-app.get('/api/sales', (req, res) => {
+app.get('/api/sales', async (req, res) => {
   try {
-    const sales = db.prepare('SELECT * FROM sales ORDER BY date DESC').all();
-    res.json(sales);
+    const result = await pool.query('SELECT * FROM sales ORDER BY date DESC');
+    res.json(result.rows);
   } catch (error) {
     console.error('Get sales error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/sales', (req, res) => {
+app.post('/api/sales', async (req, res) => {
   const { date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id } = req.body;
   try {
-    const stmt = db.prepare(
-      'INSERT INTO sales (date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    );
     const calculatedProfit = profit !== undefined ? profit : (sales_rate || 0) - (net_rate || 0);
-    const info = stmt.run(date, agency, supplier, national, passport_number || null, service, net_rate, sales_rate, calculatedProfit, documents || null, (remarks && remarks.trim()) || null, status || '', user_id || null);
-    res.json({ id: info.lastInsertRowid, ...req.body, profit: calculatedProfit });
+    const inserted = await pool.query(
+      `INSERT INTO sales (date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING *`,
+      [
+        date,
+        agency,
+        supplier,
+        national,
+        passport_number || null,
+        service,
+        net_rate,
+        sales_rate,
+        calculatedProfit,
+        documents || null,
+        (remarks && remarks.trim()) || null,
+        status || '',
+        user_id || null,
+      ]
+    );
+    res.json(inserted.rows[0]);
   } catch (error) {
     console.error('Add sale error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.put('/api/sales/:id', (req, res) => {
+app.put('/api/sales/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const validFields = ['date', 'agency', 'supplier', 'national', 'passport_number', 'service', 'net_rate', 'sales_rate', 'profit', 'documents', 'remarks', 'status'];
@@ -316,29 +221,30 @@ app.put('/api/sales/:id', (req, res) => {
       return res.json({ id: Number(id), ...updates });
     }
 
-    const setClause = fieldsToUpdate.map(field => `${field} = ?`).join(', ');
+    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
     const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') {
-        return (updates[field] && updates[field].trim()) || null;
-      }
+      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
+      if (field === 'documents') return updates[field] || null;
+      if (field === 'passport_number') return updates[field] || null;
       return updates[field];
     });
     values.push(id);
 
-    const stmt = db.prepare(`UPDATE sales SET ${setClause} WHERE id = ?`);
-    stmt.run(...values);
-
-    res.json({ id: Number(id), ...updates });
+    const updated = await pool.query(
+      `UPDATE sales SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    res.json(updated.rows[0] || { id: Number(id), ...updates });
   } catch (error) {
     console.error('Update sale error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/sales/:id', (req, res) => {
+app.delete('/api/sales/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM sales WHERE id = ?').run(id);
+    await pool.query('DELETE FROM sales WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete sale error:', error);
@@ -347,45 +253,49 @@ app.delete('/api/sales/:id', (req, res) => {
 });
 
 // ============ STAFF ============
-app.get('/api/staff', (req, res) => {
+app.get('/api/staff', async (req, res) => {
   try {
-    const staff = db.prepare('SELECT * FROM staff ORDER BY name').all();
-    res.json(staff);
+    const result = await pool.query('SELECT * FROM staff ORDER BY name');
+    res.json(result.rows);
   } catch (error) {
     console.error('Get staff error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/staff', (req, res) => {
+app.post('/api/staff', async (req, res) => {
   const { name, position, salary, phone } = req.body;
   try {
-    const stmt = db.prepare('INSERT INTO staff (name, position, salary, phone) VALUES (?, ?, ?, ?)');
-    const info = stmt.run(name, position || null, salary || 0, phone || null);
-    res.json({ id: info.lastInsertRowid, ...req.body });
+    const inserted = await pool.query(
+      `INSERT INTO staff (name, position, salary, phone) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [name, position || null, salary || 0, phone || null]
+    );
+    res.json(inserted.rows[0]);
   } catch (error) {
     console.error('Add staff error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.put('/api/staff/:id', (req, res) => {
+app.put('/api/staff/:id', async (req, res) => {
   const { id } = req.params;
   const { name, position, salary, phone } = req.body;
   try {
-    const stmt = db.prepare('UPDATE staff SET name = ?, position = ?, salary = ?, phone = ? WHERE id = ?');
-    stmt.run(name, position || null, salary || 0, phone || null, id);
-    res.json({ id: Number(id), ...req.body });
+    const updated = await pool.query(
+      `UPDATE staff SET name = $1, position = $2, salary = $3, phone = $4 WHERE id = $5 RETURNING *`,
+      [name, position || null, salary || 0, phone || null, id]
+    );
+    res.json(updated.rows[0] || { id: Number(id), ...req.body });
   } catch (error) {
     console.error('Update staff error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/staff/:id', (req, res) => {
+app.delete('/api/staff/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM staff WHERE id = ?').run(id);
+    await pool.query('DELETE FROM staff WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete staff error:', error);
@@ -394,31 +304,33 @@ app.delete('/api/staff/:id', (req, res) => {
 });
 
 // ============ SUPPLIER PAYMENTS ============
-app.get('/api/supplier-payments', (req, res) => {
+app.get('/api/supplier-payments', async (req, res) => {
   try {
-    const payments = db.prepare('SELECT * FROM supplier_payments ORDER BY date DESC').all();
-    res.json(payments);
+    const result = await pool.query('SELECT * FROM supplier_payments ORDER BY date DESC');
+    res.json(result.rows);
   } catch (error) {
     console.error('Get supplier payments error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/supplier-payments', (req, res) => {
+app.post('/api/supplier-payments', async (req, res) => {
   const { supplier_name, amount, date, receipt_url, remarks, status, user_id } = req.body;
   try {
-    const stmt = db.prepare(
-      'INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    const inserted = await pool.query(
+      `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       RETURNING *`,
+      [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null]
     );
-    const info = stmt.run(supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null);
-    res.json({ id: info.lastInsertRowid, ...req.body });
+    res.json(inserted.rows[0]);
   } catch (error) {
     console.error('Add supplier payment error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.put('/api/supplier-payments/:id', (req, res) => {
+app.put('/api/supplier-payments/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const validFields = ['supplier_name', 'amount', 'date', 'receipt_url', 'remarks', 'status'];
@@ -431,29 +343,29 @@ app.put('/api/supplier-payments/:id', (req, res) => {
       return res.json({ id: Number(id), ...updates });
     }
 
-    const setClause = fieldsToUpdate.map(field => `${field} = ?`).join(', ');
+    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
     const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') {
-        return (updates[field] && updates[field].trim()) || null;
-      }
+      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
+      if (field === 'receipt_url') return updates[field] || null;
       return updates[field];
     });
     values.push(id);
 
-    const stmt = db.prepare(`UPDATE supplier_payments SET ${setClause} WHERE id = ?`);
-    stmt.run(...values);
-
-    res.json({ id: Number(id), ...updates });
+    const updated = await pool.query(
+      `UPDATE supplier_payments SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    res.json(updated.rows[0] || { id: Number(id), ...updates });
   } catch (error) {
     console.error('Update supplier payment error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/supplier-payments/:id', (req, res) => {
+app.delete('/api/supplier-payments/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM supplier_payments WHERE id = ?').run(id);
+    await pool.query('DELETE FROM supplier_payments WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete supplier payment error:', error);
@@ -462,31 +374,44 @@ app.delete('/api/supplier-payments/:id', (req, res) => {
 });
 
 // ============ SALARY PAYMENTS ============
-app.get('/api/salary-payments', (req, res) => {
+app.get('/api/salary-payments', async (req, res) => {
   try {
-    const payments = db.prepare('SELECT * FROM salary_payments ORDER BY date DESC').all();
-    res.json(payments);
+    const result = await pool.query('SELECT * FROM salary_payments ORDER BY date DESC');
+    res.json(result.rows);
   } catch (error) {
     console.error('Get salary payments error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/salary-payments', (req, res) => {
+app.post('/api/salary-payments', async (req, res) => {
   const { staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id } = req.body;
   try {
-    const stmt = db.prepare(
-      'INSERT INTO salary_payments (staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    const inserted = await pool.query(
+      `INSERT INTO salary_payments (staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING *`,
+      [
+        staff_id,
+        staff_name,
+        amount,
+        advance || 0,
+        paid_month,
+        date,
+        receipt_url || null,
+        (remarks && remarks.trim()) || null,
+        status || '',
+        user_id || null,
+      ]
     );
-    const info = stmt.run(staff_id, staff_name, amount, advance || 0, paid_month, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null);
-    res.json({ id: info.lastInsertRowid, ...req.body });
+    res.json(inserted.rows[0]);
   } catch (error) {
     console.error('Add salary payment error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.put('/api/salary-payments/:id', (req, res) => {
+app.put('/api/salary-payments/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const validFields = ['staff_id', 'staff_name', 'amount', 'advance', 'paid_month', 'date', 'receipt_url', 'remarks', 'status'];
@@ -499,29 +424,29 @@ app.put('/api/salary-payments/:id', (req, res) => {
       return res.json({ id: Number(id), ...updates });
     }
 
-    const setClause = fieldsToUpdate.map(field => `${field} = ?`).join(', ');
+    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
     const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') {
-        return (updates[field] && updates[field].trim()) || null;
-      }
+      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
+      if (field === 'receipt_url') return updates[field] || null;
       return updates[field];
     });
     values.push(id);
 
-    const stmt = db.prepare(`UPDATE salary_payments SET ${setClause} WHERE id = ?`);
-    stmt.run(...values);
-
-    res.json({ id: Number(id), ...updates });
+    const updated = await pool.query(
+      `UPDATE salary_payments SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    res.json(updated.rows[0] || { id: Number(id), ...updates });
   } catch (error) {
     console.error('Update salary payment error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/salary-payments/:id', (req, res) => {
+app.delete('/api/salary-payments/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare('DELETE FROM salary_payments WHERE id = ?').run(id);
+    await pool.query('DELETE FROM salary_payments WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     console.error('Delete salary payment error:', error);
@@ -570,10 +495,10 @@ app.post('/api/upload-multiple', upload.array('files', 10), (req, res) => {
 });
 
 // ============ DASHBOARD STATS ============
-app.get('/api/dashboard/stats', (req, res) => {
+app.get('/api/dashboard/stats', async (req, res) => {
   try {
-    const salesData = db.prepare('SELECT SUM(sales_rate) as total, SUM(profit) as totalProfit, COUNT(*) as count FROM sales').get();
-    const expensesData = db.prepare('SELECT SUM(amount) as total, COUNT(*) as count FROM expenses').get();
+    const salesData = (await pool.query('SELECT SUM(sales_rate) as total, SUM(profit) as "totalProfit", COUNT(*) as count FROM sales')).rows[0];
+    const expensesData = (await pool.query('SELECT SUM(amount) as total, COUNT(*) as count FROM expenses')).rows[0];
 
     const totalSales = salesData?.total || 0;
     const totalProfit = salesData?.totalProfit || 0;
@@ -596,14 +521,115 @@ app.get('/api/dashboard/stats', (req, res) => {
   }
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
+// ============ DROPDOWN OPTIONS ============
+app.get('/api/dropdown-options', async (req, res) => {
+  try {
+    const { type, table_type } = req.query;
+    let query = 'SELECT * FROM dropdown_options WHERE 1=1';
+    let params = [];
+    let paramIndex = 1;
+    
+    if (type) {
+      query += ` AND type = $${paramIndex}`;
+      params.push(type);
+      paramIndex++;
+    }
+    
+    if (table_type) {
+      // When table_type is specified, STRICTLY return ONLY options for that specific table type
+      // This ensures sales options don't appear in expenses, etc.
+      query += ` AND table_type = $${paramIndex}`;
+      params.push(table_type);
+      paramIndex++;
+    } else if (type === 'status') {
+      // For status type without table_type specified, return options without table_type (legacy/fallback)
+      // This is for backward compatibility only
+      query += ` AND table_type IS NULL`;
+    }
+    
+    query += ' ORDER BY type, table_type, display_order, value';
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get dropdown options error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Start Server
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-  console.log(`Upload endpoint available at http://localhost:${port}/api/upload`);
-  console.log(`Uploads directory: ${uploadsDir}`);
+app.post('/api/dropdown-options', async (req, res) => {
+  const { type, value, display_order, color, table_type } = req.body;
+  if (!type || !value) {
+    return res.status(400).json({ error: 'Type and value are required' });
+  }
+  // For status type, table_type is required
+  if (type === 'status' && !table_type) {
+    return res.status(400).json({ error: 'table_type is required for status options' });
+  }
+  try {
+    const inserted = await pool.query(
+      `INSERT INTO dropdown_options (type, value, display_order, color, table_type)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (type, value, table_type) DO UPDATE SET display_order = $3, color = COALESCE(NULLIF($4, ''), dropdown_options.color)
+       RETURNING *`,
+      [type, value, display_order || 0, color || null, table_type || null]
+    );
+    res.json(inserted.rows[0]);
+  } catch (error) {
+    console.error('Add dropdown option error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/dropdown-options/:id', async (req, res) => {
+  const { id } = req.params;
+  const { value, display_order, color, table_type } = req.body;
+  try {
+    // Get the existing option to preserve table_type if not provided
+    const existing = await pool.query('SELECT type, table_type FROM dropdown_options WHERE id = $1', [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Dropdown option not found' });
+    }
+    
+    // Preserve existing table_type if not provided in update, but allow explicit changes
+    const finalTableType = table_type !== undefined ? table_type : existing.rows[0].table_type;
+    
+    // For status type, ensure table_type is set
+    if (existing.rows[0].type === 'status' && !finalTableType) {
+      return res.status(400).json({ error: 'table_type is required for status options' });
+    }
+    
+    const updated = await pool.query(
+      `UPDATE dropdown_options SET value = $1, display_order = $2, color = COALESCE(NULLIF($3, ''), dropdown_options.color), table_type = $4 WHERE id = $5 RETURNING *`,
+      [value, display_order || 0, color || null, finalTableType, id]
+    );
+    res.json(updated.rows[0]);
+  } catch (error) {
+    console.error('Update dropdown option error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/dropdown-options/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM dropdown_options WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete dropdown option error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+  // Start Server
+  app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+    console.log(`Upload endpoint available at http://localhost:${port}/api/upload`);
+    console.log(`Uploads directory: ${uploadsDir}`);
+  });
+}
+
+start().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
 });

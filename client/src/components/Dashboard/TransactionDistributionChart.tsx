@@ -85,7 +85,7 @@ const TransactionDistributionChart = () => {
         >
             {/* Header */}
             <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Transaction Distribution</h3>
+                <h3 className="text-lg font-bold text-[var(--dark-brown)] mb-1">Transaction Distribution</h3>
                 <p className="text-sm text-gray-500">Breakdown of all transaction types</p>
                 <div className="mt-2 flex items-center gap-2">
                     <div className="text-2xl font-bold" style={{ color: '#5D4037' }}>

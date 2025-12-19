@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../UI/Modal';
 import { useData } from '../../context/DataContext';
 import type { Expense, SalaryPayment } from '../../services/api';
-import { fileUploadApi } from '../../services/api';
+import { fileUploadApi, dropdownOptionsApi } from '../../services/api';
 import { Upload, X, Receipt, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -12,22 +12,12 @@ interface ExpenseModalProps {
     expense?: Expense | SalaryPayment | null;
 }
 
-const CATEGORIES = [
-    'Office Supplies',
-    'Utilities',
-    'Travel',
-    'Marketing',
-    'Software',
-    'Equipment',
-    'Rent',
-    'Other',
-];
-
 const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense }) => {
     const { addExpense, updateExpense, addSalaryPayment, updateSalaryPayment, staff } = useData();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'general' | 'salary'>('general');
+    const [categories, setCategories] = useState<string[]>([]);
 
     const [customCategory, setCustomCategory] = useState('');
 
@@ -50,6 +40,24 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
         date: new Date().toISOString().split('T')[0],
         remarks: '',
     });
+
+    // Load dropdown options
+    useEffect(() => {
+        if (isOpen) {
+            loadDropdownOptions();
+        }
+    }, [isOpen]);
+
+    const loadDropdownOptions = async () => {
+        try {
+            const categoryOptions = await dropdownOptionsApi.getAll('category');
+            setCategories(categoryOptions.map(opt => opt.value).concat('Other'));
+        } catch (error) {
+            console.error('Error loading dropdown options:', error);
+            // Fallback to empty array if API fails
+            setCategories(['Other']);
+        }
+    };
 
     useEffect(() => {
         if (expense) {
@@ -80,7 +88,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
             } else {
                 // It's a general expense
                 const exp = expense as Expense;
-                const categoryInList = CATEGORIES.includes(exp.category || '');
+                const categoryInList = categories.includes(exp.category || '');
 
                 setFormData({
                     description: exp.description || '',
@@ -132,7 +140,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
         }
         setSelectedFile(null);
         setError(null);
-    }, [expense, isOpen]);
+    }, [expense, isOpen, categories]);
 
     const handleSubmitGeneral = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -362,7 +370,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                             onBlur={(e) => e.target.style.borderColor = '#e8ddd0'}
                         >
                             <option value="">Select category</option>
-                            {CATEGORIES.map((cat) => (
+                            {categories.map((cat) => (
                                 <option key={cat} value={cat}>{cat}</option>
                             ))}
                         </select>

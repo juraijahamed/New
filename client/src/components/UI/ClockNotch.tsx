@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, LogOut, WifiOff } from 'lucide-react';
+import { ChevronDown, LogOut, WifiOff, RefreshCw } from 'lucide-react';
 import { healthApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -103,6 +103,11 @@ const ClockNotch = () => {
     const handleLogout = () => {
         logout();
         navigate('/login');
+    };
+
+    const handleRefresh = () => {
+        // Hard refresh the page (bypasses cache)
+        window.location.reload();
     };
 
     const MiniAnalogClock = ({ hours, minutes, seconds, label }: { hours: number; minutes: number; seconds: number; label: string }) => {
@@ -226,6 +231,20 @@ const ClockNotch = () => {
                     >
                         <ChevronDown size={14} />
                     </motion.div>
+
+                    <div className="w-px h-3" style={{ background: 'rgba(218, 165, 32, 0.4)' }} />
+
+                    {/* Refresh Button */}
+                    <motion.button
+                        onClick={handleRefresh}
+                        className="transition-colors flex items-center"
+                        style={{ color: '#A1887F' }}
+                        whileHover={{ color: '#DAA520', scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Refresh"
+                    >
+                        <RefreshCw size={14} />
+                    </motion.button>
 
                     <div className="w-px h-3" style={{ background: 'rgba(218, 165, 32, 0.4)' }} />
 

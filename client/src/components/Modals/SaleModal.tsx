@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../UI/Modal';
 import { useData } from '../../context/DataContext';
 import type { Sale } from '../../services/api';
-import { fileUploadApi } from '../../services/api';
+import { fileUploadApi, dropdownOptionsApi } from '../../services/api';
 import { Upload, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -12,41 +12,14 @@ interface SaleModalProps {
     sale?: Sale | null;
 }
 
-const SERVICES = [
-    'Visa Services',
-    'Ticketing',
-    'Hotel Booking',
-    'Tour Package',
-    'Insurance',
-    'Other',
-];
-
-const NATIONALITIES = [
-    'Indian',
-    'Pakistani',
-    'Filipino',
-    'Bangladeshi',
-    'Egyptian',
-    'British',
-    'American',
-    'Emirati',
-    'Saudi',
-    'Jordanian',
-    'Lebanese',
-    'Syrian',
-    'Sudanese',
-    'Nepali',
-    'Sri Lankan',
-    'Chinese',
-    'Other',
-];
-
 const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
     const { addSale, updateSale } = useData();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [customService, setCustomService] = useState('');
     const [customNationality, setCustomNationality] = useState('');
+    const [services, setServices] = useState<string[]>([]);
+    const [nationalities, setNationalities] = useState<string[]>([]);
 
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
@@ -64,11 +37,34 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
 
     const profit = (parseFloat(formData.sales_rate) || 0) - (parseFloat(formData.net_rate) || 0);
 
+    // Load dropdown options
+    useEffect(() => {
+        if (isOpen) {
+            loadDropdownOptions();
+        }
+    }, [isOpen]);
+
+    const loadDropdownOptions = async () => {
+        try {
+            const [serviceOptions, nationalityOptions] = await Promise.all([
+                dropdownOptionsApi.getAll('service'),
+                dropdownOptionsApi.getAll('nationality'),
+            ]);
+            setServices(serviceOptions.map(opt => opt.value).concat('Other'));
+            setNationalities(nationalityOptions.map(opt => opt.value).concat('Other'));
+        } catch (error) {
+            console.error('Error loading dropdown options:', error);
+            // Fallback to empty arrays if API fails
+            setServices(['Other']);
+            setNationalities(['Other']);
+        }
+    };
+
     useEffect(() => {
         if (sale) {
             // Check if the stored service is in the list, if not it's a custom value
-            const serviceInList = SERVICES.includes(sale.service || '');
-            const nationalityInList = NATIONALITIES.includes(sale.national || '');
+            const serviceInList = services.includes(sale.service || '');
+            const nationalityInList = nationalities.includes(sale.national || '');
 
             setFormData({
                 date: sale.date || new Date().toISOString().split('T')[0],
@@ -112,7 +108,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
         }
         setSelectedFiles([]);
         setError(null);
-    }, [sale, isOpen]);
+    }, [sale, isOpen, services, nationalities]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -233,7 +229,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                             onBlur={(e) => e.target.style.borderColor = '#e8ddd0'}
                         >
                             <option value="">Select service</option>
-                            {SERVICES.map((s) => (
+                            {services.map((s) => (
                                 <option key={s} value={s}>{s}</option>
                             ))}
                         </select>
@@ -322,7 +318,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                             onBlur={(e) => e.target.style.borderColor = '#e8ddd0'}
                         >
                             <option value="">Select nationality</option>
-                            {NATIONALITIES.map((n) => (
+                            {nationalities.map((n) => (
                                 <option key={n} value={n}>{n}</option>
                             ))}
                         </select>

@@ -9,6 +9,7 @@ interface StatsCardProps {
     icon: React.ReactNode;
     colorClass?: string;
     isPrivileged?: boolean;
+    isHidden?: boolean;
 }
 
 const StatsCard: React.FC<StatsCardProps> = ({
@@ -17,9 +18,12 @@ const StatsCard: React.FC<StatsCardProps> = ({
     label,
     icon,
     colorClass = 'bg-gray-100 text-gray-600',
-    isPrivileged = false
+    isPrivileged = false,
+    isHidden: externalIsHidden
 }) => {
-    const [isHidden, setIsHidden] = useState(isPrivileged);
+    const [internalIsHidden, setInternalIsHidden] = useState(isPrivileged);
+    // Use external isHidden prop if provided, otherwise use internal state
+    const isHidden = externalIsHidden !== undefined ? externalIsHidden : internalIsHidden;
 
     return (
         <motion.div
@@ -51,9 +55,9 @@ const StatsCard: React.FC<StatsCardProps> = ({
                         >
                             {isHidden ? '••••••' : `AED ${value}`}
                         </motion.h3>
-                        {isPrivileged && (
+                        {isPrivileged && externalIsHidden === undefined && (
                             <motion.button
-                                onClick={() => setIsHidden(!isHidden)}
+                                onClick={() => setInternalIsHidden(!internalIsHidden)}
                                 className="p-1 rounded-md transition-colors"
                                 style={{ color: '#A1887F' }}
                                 whileHover={{ color: '#DAA520' }}

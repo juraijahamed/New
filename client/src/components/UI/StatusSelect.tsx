@@ -8,19 +8,41 @@ interface StatusSelectProps {
     className?: string;
 }
 
-const statusColors: Record<string, { bg: string; text: string; border: string }> = {
-    'pending': { bg: '#FF9800', text: '#FFFFFF', border: '#F57C00' }, // Vibrant Orange
-    'credited': { bg: '#4CAF50', text: '#FFFFFF', border: '#388E3C' }, // Vibrant Green
-    'transferred': { bg: '#2196F3', text: '#FFFFFF', border: '#1976D2' }, // Vibrant Blue
-    'canceled': { bg: '#F44336', text: '#FFFFFF', border: '#D32F2F' }, // Vibrant Red
-    'cleared': { bg: '#FFD700', text: '#000000', border: '#FFA000' }, // Vibrant Gold (Dark text for contrast)
-    'on-hold': { bg: '#795548', text: '#FFFFFF', border: '#5D4037' }, // Vibrant Brown
-    'default': { bg: '#FFFFFF', text: '#374151', border: '#D1D5DB' } // Default gray
+const defaultStatusColors: Record<string, { bg: string; text: string; border: string }> = {
+    'pending': { bg: '#FF9800', text: '#FFFFFF', border: '#F57C00' },
+    'credited': { bg: '#4CAF50', text: '#FFFFFF', border: '#388E3C' },
+    'transferred': { bg: '#2196F3', text: '#FFFFFF', border: '#1976D2' },
+    'canceled': { bg: '#F44336', text: '#FFFFFF', border: '#D32F2F' },
+    'cleared': { bg: '#FFD700', text: '#000000', border: '#FFA000' },
+    'on-hold': { bg: '#795548', text: '#FFFFFF', border: '#5D4037' },
+    'default': { bg: '#FFFFFF', text: '#374151', border: '#D1D5DB' }
+};
+
+// Helper function to determine text color based on background
+const getTextColor = (bgColor: string): string => {
+    if (!bgColor) return '#374151';
+    const hex = bgColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 155 ? '#000000' : '#FFFFFF';
+};
+
+// Helper function to darken color for border
+const darkenColor = (color: string, amount: number = 0.2): string => {
+    if (!color) return '#D1D5DB';
+    const hex = color.replace('#', '');
+    const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - Math.round(255 * amount));
+    const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - Math.round(255 * amount));
+    const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - Math.round(255 * amount));
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 };
 
 export const StatusSelect: React.FC<StatusSelectProps> = ({ value, onChange, className }) => {
     const currentStatus = value === 'draft' ? '' : (value || '');
-    const styles = statusColors[currentStatus] || statusColors['default'];
+    const styles = defaultStatusColors[currentStatus] || defaultStatusColors['default'];
+    const availableStatuses = Object.keys(defaultStatusColors).filter(k => k !== 'default');
 
     return (
         <select
@@ -37,12 +59,26 @@ export const StatusSelect: React.FC<StatusSelectProps> = ({ value, onChange, cla
             onClick={(e) => e.stopPropagation()} // Prevent row click
         >
             <option value="" style={{ backgroundColor: '#FFFFFF', color: '#000000' }}>Select Status</option>
-            <option value="pending" style={{ backgroundColor: '#FF9800', color: '#FFFFFF' }}>Pending Payment</option>
-            <option value="credited" style={{ backgroundColor: '#4CAF50', color: '#FFFFFF' }}>Amount Credited</option>
-            <option value="transferred" style={{ backgroundColor: '#2196F3', color: '#FFFFFF' }}>Transferred to Bank</option>
-            <option value="canceled" style={{ backgroundColor: '#F44336', color: '#FFFFFF' }}>Canceled</option>
-            <option value="cleared" style={{ backgroundColor: '#FFD700', color: '#000000' }}>Cleared</option>
-            <option value="on-hold" style={{ backgroundColor: '#795548', color: '#FFFFFF' }}>On Hold</option>
+            {availableStatuses.map((status) => {
+                const statusStyles = defaultStatusColors[status];
+                const displayName = status
+                    .split('-')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+                
+                return (
+                    <option 
+                        key={status} 
+                        value={status}
+                        style={{ 
+                            backgroundColor: statusStyles.bg, 
+                            color: statusStyles.text 
+                        }}
+                    >
+                        {displayName}
+                    </option>
+                );
+            })}
         </select>
     );
 };

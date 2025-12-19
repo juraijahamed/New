@@ -1,18 +1,23 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, CreditCard, FileText } from 'lucide-react';
+import { PlusCircle, Loader2, CreditCard } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import SupplierPaymentModal from '../components/Modals/SupplierPaymentModal';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
 import { StatusSelect } from '../components/UI/StatusSelect';
+import { EditableCell } from '../components/UI/EditableCell';
+import { DocumentCell } from '../components/UI/DocumentCell';
+import { Toast } from '../components/UI/Toast';
 import type { SupplierPayment } from '../services/api';
 
 const SupplierPayments = () => {
     const { supplierPayments, isLoading, updateSupplierPayment } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
-    const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ url: string; title: string; paymentId?: number } | null>(null);
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
 
     const API_BASE_URL = 'http://localhost:3001';
 
@@ -24,60 +29,96 @@ const SupplierPayments = () => {
     const columns = useMemo<ColumnDef<SupplierPayment>[]>(
         () => [
             {
+                accessorKey: 'id',
+                header: 'ID',
+                cell: ({ row }) => (
+                    <div 
+                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        onClick={(e) => {
+                            // Allow single clicks to bubble up for cell selection
+                        }}
+                        onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(row.original);
+                        }}
+                        title="Double-click to open edit form"
+                    >
+                        {row.original.id || '-'}
+                    </div>
+                ),
+            },
+            {
                 accessorKey: 'date',
                 header: 'Date',
-                cell: (info) => new Date(info.getValue() as string).toLocaleDateString('en-GB'),
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.date}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { date: val as string });
+                        }}
+                        type="date"
+                        formatDisplay={(val) => new Date(val as string).toLocaleDateString('en-GB')}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'supplier_name',
                 header: 'Supplier Name',
-                cell: (info) => <span className="font-semibold text-gray-700">{info.getValue() as string}</span>,
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.supplier_name}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { supplier_name: val as string });
+                        }}
+                        className="font-semibold text-gray-700 text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'amount',
                 header: 'Amount',
-                cell: (info) => (
-                    <span className="font-mono font-bold text-purple-600">
-                        AED {(info.getValue() as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.amount}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                        className="font-mono font-bold text-purple-600 text-xs"
+                    />
                 ),
             },
             {
                 accessorKey: 'receipt_url',
                 header: 'Receipt',
-                cell: (info) => {
-                    const docPath = info.getValue() as string;
-                    if (!docPath) return <span className="text-gray-300">-</span>;
-                    return (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewFile({
-                                    url: `${API_BASE_URL}${docPath}`,
-                                    title: 'Payment Receipt'
-                                });
-                            }}
-                            className="p-1.5 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors group flex items-center gap-1"
-                            title="View Receipt"
-                        >
-                            <FileText size={16} />
-                            <span className="text-xs font-medium">View</span>
-                        </button>
-                    );
-                },
+                cell: ({ row }) => (
+                    <DocumentCell
+                        value={row.original.receipt_url}
+                        onUpdate={async (receipt_url) => {
+                            await updateSupplierPayment(row.original.id!, { receipt_url });
+                        }}
+                        apiBaseUrl={API_BASE_URL}
+                        onPreview={(url, title) => {
+                            setPreviewFile({ url, title, paymentId: row.original.id });
+                        }}
+                        multiple={false}
+                    />
+                ),
             },
             {
                 accessorKey: 'remarks',
                 header: 'Description',
-                cell: (info) => {
-                    const notes = info.getValue() as string;
-                    if (!notes) return <span className="text-gray-300">-</span>;
-                    return (
-                        <span className="text-sm text-gray-600 max-w-xs truncate block" title={notes}>
-                            {notes}
-                        </span>
-                    );
-                },
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.remarks}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { remarks: val as string });
+                        }}
+                        className="text-xs text-gray-600"
+                    />
+                ),
             },
             {
                 accessorKey: 'status',
@@ -97,7 +138,13 @@ const SupplierPayments = () => {
     const totalPayments = supplierPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return (
-        <div className="p-2.5 h-full flex flex-col">
+        <>
+            <Toast
+                message={toastMessage}
+                isVisible={showToast}
+                onClose={() => setShowToast(false)}
+            />
+            <div className="p-2.5 h-full flex flex-col">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
@@ -105,7 +152,7 @@ const SupplierPayments = () => {
                         Supplier Payments
                     </h1>
                     <p className="text-gray-500 mt-1">
-                        Manage payments to your suppliers. (Double-click row to edit)
+                        Manage payments to your suppliers.
                         <span className="ml-2 font-semibold text-purple-600">
                             Total: AED {totalPayments.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
@@ -132,7 +179,7 @@ const SupplierPayments = () => {
                         <p className="text-sm">Click "New Payment" to add your first entry</p>
                     </div>
                 ) : (
-                    <DataTable columns={columns} data={supplierPayments} onEdit={handleEdit} />
+                    <DataTable columns={columns} data={supplierPayments} />
                 )}
             </div>
 
@@ -148,8 +195,52 @@ const SupplierPayments = () => {
                 onClose={() => setPreviewFile(null)}
                 fileUrl={previewFile?.url}
                 title={previewFile?.title}
+                onEdit={() => {
+                    if (previewFile?.paymentId) {
+                        const payment = supplierPayments.find(p => p.id === previewFile.paymentId);
+                        if (payment) {
+                            setSelectedPayment(payment);
+                            setIsModalOpen(true);
+                            setPreviewFile(null);
+                        }
+                    }
+                }}
+                onRemove={async () => {
+                    if (previewFile?.paymentId) {
+                        await updateSupplierPayment(previewFile.paymentId, { receipt_url: '' });
+                        setPreviewFile(null);
+                    }
+                }}
+                onDownload={async () => {
+                    if (previewFile?.url) {
+                        try {
+                            const response = await fetch(previewFile.url);
+                            if (!response.ok) throw new Error('Failed to fetch file');
+                            
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            const filename = previewFile.url.split('/').pop() || 'file';
+                            link.download = filename;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                            
+                            setToastMessage(`File downloaded: ${filename}`);
+                            setShowToast(true);
+                        } catch (error) {
+                            console.error('Download error:', error);
+                            setToastMessage('Failed to download file');
+                            setShowToast(true);
+                        }
+                    }
+                }}
             />
         </div>
+        </>
     );
 };
 

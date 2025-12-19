@@ -1,18 +1,23 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, FileText, Globe, Truck, BookUser, BarChart3 } from 'lucide-react';
+import { PlusCircle, Loader2, BarChart3 } from 'lucide-react';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
 import { useData } from '../context/DataContext';
 import SaleModal from '../components/Modals/SaleModal';
 import { StatusSelect } from '../components/UI/StatusSelect';
+import { EditableCell } from '../components/UI/EditableCell';
+import { DocumentCell } from '../components/UI/DocumentCell';
+import { Toast } from '../components/UI/Toast';
 import type { Sale } from '../services/api';
 
 const Sales = () => {
     const { sales, isLoading, updateSale } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
-    const [previewFile, setPreviewFile] = useState<{ url: string; title: string } | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ url: string; title: string; saleId?: number } | null>(null);
+    const [showToast, setShowToast] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
 
     const API_BASE_URL = 'http://localhost:3001'; // Should preferably come from env or config
 
@@ -24,70 +29,138 @@ const Sales = () => {
     const columns = useMemo<ColumnDef<Sale>[]>(
         () => [
             {
+                accessorKey: 'id',
+                header: 'ID',
+                cell: ({ row }) => (
+                    <div 
+                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        onClick={(e) => {
+                            // Allow single clicks to bubble up for cell selection
+                        }}
+                        onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(row.original);
+                        }}
+                        title="Double-click to open edit form"
+                    >
+                        {row.original.id || '-'}
+                    </div>
+                ),
+            },
+            {
                 accessorKey: 'date',
                 header: 'Date',
-                cell: (info) => new Date(info.getValue() as string).toLocaleDateString('en-GB'),
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.date}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { date: val as string });
+                        }}
+                        type="date"
+                        formatDisplay={(val) => new Date(val as string).toLocaleDateString('en-GB')}
+                        className="text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'agency',
                 header: 'Client/Agency',
-                cell: (info) => <span className="font-semibold text-gray-700">{info.getValue() as string}</span>,
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.agency}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { agency: val as string });
+                        }}
+                        className="font-semibold text-gray-700 text-xs"
+                    />
+                ),
             },
             {
                 accessorKey: 'supplier',
                 header: 'Supplier',
-                cell: (info) => (
-                    <div className="flex items-center gap-1.5 text-gray-600">
-                        <Truck size={14} className="text-gray-400" />
-                        <span>{info.getValue() as string}</span>
-                    </div>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.supplier}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { supplier: val as string });
+                        }}
+                        className="text-gray-600 text-xs"
+                    />
                 ),
             },
             {
                 accessorKey: 'passport_number',
                 header: 'Passport No',
-                cell: (info) => (
-                    <div className="flex items-center gap-1.5 text-gray-600">
-                        <BookUser size={14} className="text-gray-400" />
-                        <span className="font-mono text-xs">{info.getValue() as string || '-'}</span>
-                    </div>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.passport_number}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { passport_number: val as string });
+                        }}
+                        className="font-mono text-xs text-gray-600"
+                    />
                 ),
             },
             {
                 accessorKey: 'national',
                 header: 'Nationality',
-                cell: (info) => (
-                    <div className="flex items-center gap-1.5 text-gray-600">
-                        <Globe size={14} className="text-gray-400" />
-                        <span>{info.getValue() as string}</span>
-                    </div>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.national}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { national: val as string });
+                        }}
+                        className="text-gray-600 text-xs"
+                    />
                 ),
             },
             {
                 accessorKey: 'service',
                 header: 'Service',
-                cell: (info) => (
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-50 to-blue-100 text-blue-600 border border-blue-200">
-                        {info.getValue() as string}
-                    </span>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.service}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { service: val as string });
+                        }}
+                        className="text-gray-700 text-xs"
+                    />
                 ),
             },
             {
                 accessorKey: 'net_rate',
                 header: 'Net Rate',
-                cell: (info) => (
-                    <span className="font-mono text-gray-600">
-                        AED {(info.getValue() as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.net_rate}
+                        onSave={async (val) => {
+                            const netRate = typeof val === 'number' ? val : parseFloat(String(val)) || 0;
+                            const salesRate = row.original.sales_rate || 0;
+                            const profit = salesRate - netRate;
+                            await updateSale(row.original.id!, { net_rate: netRate, profit });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                        className="font-mono text-gray-600 text-xs"
+                    />
                 ),
             },
             {
                 accessorKey: 'sales_rate',
                 header: 'Sales Rate',
-                cell: (info) => (
-                    <span className="font-mono font-medium text-gray-900">
-                        AED {(info.getValue() as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.sales_rate}
+                        onSave={async (val) => {
+                            const salesRate = typeof val === 'number' ? val : parseFloat(String(val)) || 0;
+                            const netRate = row.original.net_rate || 0;
+                            const profit = salesRate - netRate;
+                            await updateSale(row.original.id!, { sales_rate: salesRate, profit });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                        className="font-mono font-medium text-gray-900 text-xs"
+                    />
                 ),
             },
             {
@@ -105,34 +178,19 @@ const Sales = () => {
             {
                 accessorKey: 'documents',
                 header: 'Documents',
-                cell: (info) => {
-                    const docPaths = info.getValue() as string;
-                    if (!docPaths) return <span className="text-gray-300">-</span>;
-                    const files = docPaths.split(',').filter(f => f.trim());
-                    const fileCount = files.length;
-                    return (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                // For multiple files, show the first one (we'll enhance this later)
-                                const firstFile = files[0]?.trim();
-                                if (firstFile) {
-                                    setPreviewFile({
-                                        url: `${API_BASE_URL}${firstFile}`,
-                                        title: fileCount > 1 ? `Sale Documents (${fileCount} files)` : 'Sale Document'
-                                    });
-                                }
-                            }}
-                            className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors group flex items-center gap-1"
-                            title={fileCount > 1 ? `View ${fileCount} documents` : "View Document"}
-                        >
-                            <FileText size={16} />
-                            <span className="text-xs font-medium">
-                                {fileCount > 1 ? `${fileCount} files` : 'View'}
-                            </span>
-                        </button>
-                    );
-                },
+                cell: ({ row }) => (
+                    <DocumentCell
+                        value={row.original.documents}
+                        onUpdate={async (documents) => {
+                            await updateSale(row.original.id!, { documents });
+                        }}
+                        apiBaseUrl={API_BASE_URL}
+                        onPreview={(url, title) => {
+                            setPreviewFile({ url, title, saleId: row.original.id });
+                        }}
+                        multiple={true}
+                    />
+                ),
             },
             {
                 accessorKey: 'status',
@@ -153,7 +211,13 @@ const Sales = () => {
     const totalProfit = sales.reduce((sum, s) => sum + (s.profit || 0), 0);
 
     return (
-        <div className="p-2.5 h-full flex flex-col">
+        <>
+            <Toast
+                message={toastMessage}
+                isVisible={showToast}
+                onClose={() => setShowToast(false)}
+            />
+            <div className="p-2.5 h-full flex flex-col">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-left text-[var(--dark-brown)] flex items-center gap-3">
@@ -161,7 +225,7 @@ const Sales = () => {
                         Sales
                     </h1>
                     <p className="text-gray-500 mt-1">
-                        Track your revenue and transactions. (Double-click row to edit)
+                        Track your revenue and transactions.
                         <span className="ml-2 font-semibold text-gray-700">
                             Total: AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
@@ -170,13 +234,21 @@ const Sales = () => {
                         </span>
                     </p>
                 </div>
-                <button
-                    onClick={() => { setSelectedSale(null); setIsModalOpen(true); }}
-                    className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
-                >
-                    <PlusCircle size={20} />
-                    New Sale
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="bg-white rounded-lg px-4 py-2.5 border border-green-200 shadow-sm">
+                        <p className="text-xs text-gray-500 mb-0.5">Total Sales</p>
+                        <p className="text-lg font-bold text-green-600 font-mono">
+                            AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => { setSelectedSale(null); setIsModalOpen(true); }}
+                        className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
+                    >
+                        <PlusCircle size={20} />
+                        New Sale
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-auto bg-white rounded-md shadow-sm border border-gray-100">
@@ -191,7 +263,7 @@ const Sales = () => {
                         <p className="text-sm">Click "New Sale" to add your first entry</p>
                     </div>
                 ) : (
-                    <DataTable columns={columns} data={sales} onEdit={handleEdit} />
+                    <DataTable columns={columns} data={sales} />
                 )}
             </div>
 
@@ -207,8 +279,52 @@ const Sales = () => {
                 onClose={() => setPreviewFile(null)}
                 fileUrl={previewFile?.url}
                 title={previewFile?.title}
+                onEdit={() => {
+                    if (previewFile?.saleId) {
+                        const sale = sales.find(s => s.id === previewFile.saleId);
+                        if (sale) {
+                            setSelectedSale(sale);
+                            setIsModalOpen(true);
+                            setPreviewFile(null);
+                        }
+                    }
+                }}
+                onRemove={async () => {
+                    if (previewFile?.saleId) {
+                        await updateSale(previewFile.saleId, { documents: '' });
+                        setPreviewFile(null);
+                    }
+                }}
+                onDownload={async () => {
+                    if (previewFile?.url) {
+                        try {
+                            const response = await fetch(previewFile.url);
+                            if (!response.ok) throw new Error('Failed to fetch file');
+                            
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            const filename = previewFile.url.split('/').pop() || 'file';
+                            link.download = filename;
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                            
+                            setToastMessage(`File downloaded: ${filename}`);
+                            setShowToast(true);
+                        } catch (error) {
+                            console.error('Download error:', error);
+                            setToastMessage('Failed to download file');
+                            setShowToast(true);
+                        }
+                    }
+                }}
             />
         </div>
+        </>
     );
 };
 

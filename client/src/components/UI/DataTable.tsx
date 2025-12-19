@@ -10,9 +10,10 @@ interface DataTableProps<TData> {
     columns: ColumnDef<TData>[];
     data: TData[];
     onEdit?: (data: TData) => void;
+    compact?: boolean;
 }
 
-export function DataTable<TData>({ columns, data, onEdit }: DataTableProps<TData>) {
+export function DataTable<TData>({ columns, data, onEdit, compact = false }: DataTableProps<TData>) {
     const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
     const [copiedCell, setCopiedCell] = useState<{ row: number; col: number } | null>(null);
 
@@ -20,15 +21,31 @@ export function DataTable<TData>({ columns, data, onEdit }: DataTableProps<TData
     React.useEffect(() => {
         const handleKeyDown = async (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCell) {
-                // Find the cell content
-                const cellValue = document.querySelector(`[data-cell-id="${selectedCell.row}-${selectedCell.col}"]`)?.textContent;
-                if (cellValue) {
-                    try {
-                        await navigator.clipboard.writeText(cellValue);
-                        setCopiedCell(selectedCell);
-                        setTimeout(() => setCopiedCell(null), 500); // Reset after 500ms
-                    } catch (err) {
-                        console.error('Failed to copy: ', err);
+                e.preventDefault();
+                // Find the cell element
+                const cellElement = document.querySelector(`[data-cell-id="${selectedCell.row}-${selectedCell.col}"]`);
+                if (cellElement) {
+                    // Try to get text content, removing extra whitespace
+                    let cellValue = cellElement.textContent?.trim() || '';
+                    
+                    // If the cell contains an EditableCell or other nested component,
+                    // try to get the display value from the inner div
+                    const displayDiv = cellElement.querySelector('.absolute.inset-0');
+                    if (displayDiv) {
+                        cellValue = displayDiv.textContent?.trim() || cellValue;
+                    }
+                    
+                    // Remove any extra whitespace and newlines
+                    cellValue = cellValue.replace(/\s+/g, ' ').trim();
+                    
+                    if (cellValue) {
+                        try {
+                            await navigator.clipboard.writeText(cellValue);
+                            setCopiedCell(selectedCell);
+                            setTimeout(() => setCopiedCell(null), 500); // Reset after 500ms
+                        } catch (err) {
+                            console.error('Failed to copy: ', err);
+                        }
                     }
                 }
             }
@@ -54,18 +71,20 @@ export function DataTable<TData>({ columns, data, onEdit }: DataTableProps<TData
 
     return (
         <div className="w-full overflow-auto">
-            <table className="w-full border-collapse" style={{ fontFamily: "'Segoe UI', Calibri, Arial, sans-serif" }}>
+            <table className="w-full border-collapse" style={{ fontFamily: "'Segoe UI', Calibri, Arial, sans-serif", tableLayout: 'auto' }}>
                 <thead>
                     {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
                             {headerGroup.headers.map((header, colIndex) => (
                                 <th
                                     key={header.id}
-                                    className="text-white text-xs font-semibold text-left px-3 py-2.5 whitespace-nowrap"
+                                    className={`text-xs font-semibold text-left whitespace-nowrap ${compact ? 'px-2 py-1.5' : 'px-3 py-2.5'}`}
                                     style={{
-                                        background: 'linear-gradient(180deg, #DAA520 0%, #B8860B 100%)',
-                                        borderRight: colIndex < headerGroup.headers.length - 1 ? '1px solid rgba(255,255,255,0.2)' : 'none',
-                                        borderBottom: '2px solid #8B6914',
+                                        background: 'var(--table-header-bg)',
+                                        color: 'var(--table-header-text)',
+                                        borderRight: colIndex < headerGroup.headers.length - 1 ? '1px solid var(--table-header-border)' : 'none',
+                                        borderBottom: '1px solid rgba(0,0,0,0.1)',
+                                        boxShadow: 'inset 0 -2px 0 rgba(218, 165, 32, 0.9)',
                                         minWidth: colIndex === 0 ? '40px' : '100px'
                                     }}
                                 >
@@ -95,12 +114,7 @@ export function DataTable<TData>({ columns, data, onEdit }: DataTableProps<TData
                         table.getRowModel().rows.map((row, rowIndex) => (
                             <tr
                                 key={row.id}
-                                onDoubleClick={(e) => {
-                                    e.stopPropagation(); // Prevent text selection or other bubbling issues
-                                    onEdit && onEdit(row.original);
-                                }}
-                                className={`transition-colors ${onEdit ? 'cursor-pointer hover:bg-orange-50' : ''}`}
-                                title={onEdit ? 'Double-click to edit' : undefined}
+                                className="transition-colors"
                                 style={{
                                     background: rowIndex % 2 === 0 ? '#ffffff' : '#fdf9f3'
                                 }}
@@ -114,20 +128,40 @@ export function DataTable<TData>({ columns, data, onEdit }: DataTableProps<TData
                                             key={cell.id}
                                             data-cell-id={`${rowIndex}-${colIndex}`}
                                             onClick={(e) => {
-                                                e.stopPropagation();
+                                                const target = e.target as HTMLElement;
+                                                
+                                                // Don't select if clicking on buttons or interactive elements
+                                                if (target.tagName === 'BUTTON' || target.closest('button')) {
+                                                    return;
+                                                }
+                                                
+                                                // Don't select if clicking on input elements
+                                                if (target.tagName === 'INPUT' || target.closest('input')) {
+                                                    return;
+                                                }
+                                                
+                                                // Don't select if clicking on select elements
+                                                if (target.tagName === 'SELECT' || target.closest('select')) {
+                                                    return;
+                                                }
+                                                
+                                                // Handle cell selection
                                                 handleCellClick(rowIndex, colIndex);
                                             }}
-                                            className="text-xs px-3 py-2 transition-all relative"
+                                            className={`text-xs transition-all relative ${compact ? 'px-2 py-1' : 'px-3 py-2'}`}
                                             style={{
-                                                borderRight: '1px solid #e8ddd0',
-                                                borderBottom: '1px solid #e8ddd0',
+                                                borderRight: '1px solid #e0d5c7',
+                                                borderBottom: '1px solid #e0d5c7',
                                                 cursor: 'cell',
                                                 outline: isCopied ? '2px solid #22c55e' : (isSelected ? '2px solid #DAA520' : 'none'),
                                                 outlineOffset: '-2px',
                                                 background: isCopied ? 'rgba(34, 197, 94, 0.2)' : (isSelected ? 'rgba(218, 165, 32, 0.15)' : undefined),
                                                 color: '#5D4037',
                                                 userSelect: 'none', // Prevent native text selection to use ours
-                                                transition: 'background-color 0.2s, outline-color 0.2s'
+                                                transition: 'background-color 0.2s, outline-color 0.2s',
+                                                position: 'relative', // Ensure absolute children are positioned relative to this cell
+                                                overflow: 'hidden', // Prevent content from expanding cell
+                                                minWidth: 0 // Allow cell to shrink if needed
                                             }}
                                         >
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}

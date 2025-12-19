@@ -1,4 +1,6 @@
-import { DollarSign, Receipt, PieChart, TrendingUp, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { DollarSign, Receipt, PieChart, TrendingUp, Loader2, Eye, EyeOff } from 'lucide-react';
+import { motion } from 'framer-motion';
 import StatsCard from '../components/Dashboard/StatsCard';
 import FinancialTrendsChart from '../components/Dashboard/FinancialTrendsChart';
 import TransactionDistributionChart from '../components/Dashboard/TransactionDistributionChart';
@@ -6,6 +8,30 @@ import { useData } from '../context/DataContext';
 
 const Dashboard = () => {
     const { dashboardStats, isLoading, expenses, sales } = useData();
+    const [showProfits, setShowProfits] = useState(false);
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Auto-hide profits after 15 seconds when they are shown
+    useEffect(() => {
+        if (showProfits) {
+            // Clear any existing timeout
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+            
+            // Set new timeout to hide profits after 15 seconds
+            timeoutRef.current = setTimeout(() => {
+                setShowProfits(false);
+            }, 15000);
+        }
+
+        // Cleanup timeout on unmount or when showProfits changes
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, [showProfits]);
 
     if (isLoading) {
         return (
@@ -26,12 +52,36 @@ const Dashboard = () => {
 
     return (
         <div className="p-2.5 space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
-                    <PieChart className="text-purple-600" />
-                    Financial Dashboard
-                </h1>
-                <p className="text-gray-500 mt-1">Track your financial health and performance.</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
+                        <PieChart className="text-purple-600" />
+                        Financial Dashboard
+                    </h1>
+                    <p className="text-gray-500 mt-1">Track your financial health and performance.</p>
+                </div>
+                <motion.button
+                    onClick={() => {
+                        // Clear any existing timeout when manually toggling
+                        if (timeoutRef.current) {
+                            clearTimeout(timeoutRef.current);
+                            timeoutRef.current = null;
+                        }
+                        setShowProfits(!showProfits);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all"
+                    style={{
+                        background: showProfits ? 'rgba(218, 165, 32, 0.1)' : 'rgba(161, 136, 127, 0.1)',
+                        border: `1px solid ${showProfits ? 'rgba(218, 165, 32, 0.3)' : 'rgba(161, 136, 127, 0.3)'}`,
+                        color: showProfits ? '#DAA520' : '#A1887F'
+                    }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title={showProfits ? 'Hide Profits' : 'Show Profits'}
+                >
+                    {showProfits ? <EyeOff size={20} /> : <Eye size={20} />}
+                    <span className="text-sm font-medium">{showProfits ? 'Hide Profits' : 'Show Profits'}</span>
+                </motion.button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -55,7 +105,7 @@ const Dashboard = () => {
                     label="From sales"
                     icon={<PieChart size={24} className="text-blue-600" />}
                     colorClass="bg-blue-100 text-blue-600"
-                    isPrivileged={true}
+                    isHidden={!showProfits}
                 />
                 <StatsCard
                     title="Net Profit"
@@ -63,13 +113,13 @@ const Dashboard = () => {
                     label="After expenses"
                     icon={<TrendingUp size={24} className="text-purple-600" />}
                     colorClass="bg-purple-100 text-purple-600"
-                    isPrivileged={true}
+                    isHidden={!showProfits}
                 />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 -mt-4">
                 <div className="lg:col-span-2">
-                    <FinancialTrendsChart sales={sales} expenses={expenses} />
+                    <FinancialTrendsChart sales={sales} expenses={expenses} showProfit={showProfits} />
                 </div>
                 <div className="-mt-2">
                     <TransactionDistributionChart />

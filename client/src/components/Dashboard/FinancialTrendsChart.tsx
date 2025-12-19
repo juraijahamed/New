@@ -5,11 +5,12 @@ import { motion } from 'framer-motion';
 interface ChartProps {
     sales: any[];
     expenses: any[];
+    showProfit?: boolean;
 }
 
 type TimeRange = '7' | '30' | '90' | '180' | '365';
 
-const FinancialTrendsChart = ({ sales, expenses }: ChartProps) => {
+const FinancialTrendsChart = ({ sales, expenses, showProfit = true }: ChartProps) => {
     const [timeRange, setTimeRange] = useState<TimeRange>('7');
 
     // Calculate chart data based on selected time range
@@ -247,15 +248,17 @@ const FinancialTrendsChart = ({ sales, expenses }: ChartProps) => {
                         fill="url(#colorExpenses)"
                         name="Expenses"
                     />
-                    <Area
-                        type="monotone"
-                        dataKey="profit"
-                        stroke="#1565c0"
-                        strokeWidth={3}
-                        fillOpacity={1}
-                        fill="url(#colorProfit)"
-                        name="Profit"
-                    />
+                    {showProfit && (
+                        <Area
+                            type="monotone"
+                            dataKey="profit"
+                            stroke="#1565c0"
+                            strokeWidth={3}
+                            fillOpacity={1}
+                            fill="url(#colorProfit)"
+                            name="Profit"
+                        />
+                    )}
                 </AreaChart>
             </ResponsiveContainer>
         </motion.div>

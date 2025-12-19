@@ -16,7 +16,7 @@ interface BreakdownCardProps {
 const CategoryBreakdown = ({ title, items }: BreakdownCardProps) => {
     return (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="text-lg font-bold text-gray-800 mb-6">{title}</h3>
+            <h3 className="text-lg font-bold text-[var(--dark-brown)] mb-6">{title}</h3>
             <div className="space-y-6">
                 {items.map((item, index) => (
                     <div key={index}>
