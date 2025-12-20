@@ -18,7 +18,7 @@ const Dashboard = () => {
             if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current);
             }
-            
+
             // Set new timeout to hide profits after 15 seconds
             timeoutRef.current = setTimeout(() => {
                 setShowProfits(false);
@@ -119,7 +119,7 @@ const Dashboard = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 -mt-4">
                 <div className="lg:col-span-2">
-                    <FinancialTrendsChart sales={sales} expenses={expenses} showProfit={showProfits} />
+                    <FinancialTrendsChart sales={sales} expenses={expenses} showProfit={true} />
                 </div>
                 <div className="-mt-2">
                     <TransactionDistributionChart />

@@ -9,12 +9,12 @@ const pool = new Pool(
   process.env.DATABASE_URL
     ? { connectionString: process.env.DATABASE_URL }
     : {
-        host: process.env.PGHOST || 'localhost',
-        port: process.env.PGPORT ? Number(process.env.PGPORT) : 5432,
-        user: process.env.PGUSER || 'postgres',
-        password: process.env.PGPASSWORD || '',
-        database: process.env.PGDATABASE || 'postgres',
-      }
+      host: process.env.PGHOST || 'localhost',
+      port: process.env.PGPORT ? Number(process.env.PGPORT) : 5432,
+      user: process.env.PGUSER || 'postgres',
+      password: process.env.PGPASSWORD || '',
+      database: process.env.PGDATABASE || 'postgres',
+    }
 );
 
 async function initSchema() {
@@ -117,7 +117,7 @@ async function initSchema() {
   } catch (err) {
     console.error('Error checking/adding color column:', err);
   }
-  
+
   try {
     const tableTypeCheck = await pool.query(`
       SELECT column_name 
@@ -139,7 +139,7 @@ async function initSchema() {
       FROM information_schema.table_constraints 
       WHERE table_name='dropdown_options' AND constraint_name='dropdown_options_type_value_table_type_key'
     `);
-    
+
     if (constraintCheck.rows.length === 0) {
       // Drop old unique constraint if it exists (might have different names)
       await pool.query(`
@@ -150,7 +150,7 @@ async function initSchema() {
         ALTER TABLE dropdown_options 
         DROP CONSTRAINT IF EXISTS dropdown_options_type_value_table_type_key
       `);
-      
+
       // Add new unique constraint with table_type
       await pool.query(`
         ALTER TABLE dropdown_options 
@@ -162,7 +162,42 @@ async function initSchema() {
     console.error('Error updating unique constraint:', err);
   }
 
+  // Cleanup: Remove existing duplicates before seeding
+  try {
+    await pool.query(`
+      DELETE FROM dropdown_options a
+      USING dropdown_options b
+      WHERE a.id > b.id
+        AND a.type = b.type
+        AND a.value = b.value
+        AND a.table_type IS NOT DISTINCT FROM b.table_type
+    `);
+  } catch (err) {
+    console.error('Error during duplicate cleanup:', err);
+  }
+
   // Initialize default dropdown values - insert each default if it doesn't exist
+  async function seedOptions(type, values, tableType = null) {
+    for (let i = 0; i < values.length; i++) {
+      try {
+        // Check if exists first because UNIQUE constraint doesn't prevent duplicates with NULL values
+        const existing = await pool.query(
+          'SELECT id FROM dropdown_options WHERE type = $1 AND value = $2 AND table_type IS NOT DISTINCT FROM $3',
+          [type, values[i], tableType]
+        );
+
+        if (existing.rows.length === 0) {
+          await pool.query(
+            'INSERT INTO dropdown_options (type, value, display_order, table_type) VALUES ($1, $2, $3, $4)',
+            [type, values[i], i, tableType]
+          );
+        }
+      } catch (err) {
+        console.error(`Error seeding ${type} "${values[i]}":`, err);
+      }
+    }
+  }
+
   const defaultServices = [
     'Visa Services',
     'Ticketing',
@@ -171,22 +206,9 @@ async function initSchema() {
     'Insurance',
   ];
   const defaultNationalities = [
-    'Indian',
-    'Pakistani',
-    'Filipino',
-    'Bangladeshi',
-    'Egyptian',
-    'British',
-    'American',
-    'Emirati',
-    'Saudi',
-    'Jordanian',
-    'Lebanese',
-    'Syrian',
-    'Sudanese',
-    'Nepali',
-    'Sri Lankan',
-    'Chinese',
+    'Indian', 'Pakistani', 'Filipino', 'Bangladeshi', 'Egyptian',
+    'British', 'American', 'Emirati', 'Saudi', 'Jordanian',
+    'Lebanese', 'Syrian', 'Sudanese', 'Nepali', 'Sri Lankan', 'Chinese',
   ];
   const defaultCategories = [
     'Office Supplies',
@@ -206,79 +228,11 @@ async function initSchema() {
     'Driver',
     'PRO',
   ];
-  const defaultStatuses = [
-    { value: 'pending', color: '#FF9800' },
-    { value: 'credited', color: '#4CAF50' },
-    { value: 'transferred', color: '#2196F3' },
-    { value: 'canceled', color: '#F44336' },
-    { value: 'cleared', color: '#FFD700' },
-    { value: 'on-hold', color: '#795548' },
-  ];
 
-  // Insert services (ON CONFLICT ensures no duplicates)
-  // Try with new constraint first, fallback to old constraint if needed
-  for (let i = 0; i < defaultServices.length; i++) {
-    try {
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order, table_type) VALUES ($1, $2, $3, $4) ON CONFLICT (type, value, table_type) DO NOTHING',
-        ['service', defaultServices[i], i, null]
-      );
-    } catch (err) {
-      // Fallback to old constraint if new one doesn't exist
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order) VALUES ($1, $2, $3) ON CONFLICT (type, value) DO NOTHING',
-        ['service', defaultServices[i], i]
-      );
-    }
-  }
-
-  // Insert nationalities
-  for (let i = 0; i < defaultNationalities.length; i++) {
-    try {
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order, table_type) VALUES ($1, $2, $3, $4) ON CONFLICT (type, value, table_type) DO NOTHING',
-        ['nationality', defaultNationalities[i], i, null]
-      );
-    } catch (err) {
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order) VALUES ($1, $2, $3) ON CONFLICT (type, value) DO NOTHING',
-        ['nationality', defaultNationalities[i], i]
-      );
-    }
-  }
-
-  // Insert categories
-  for (let i = 0; i < defaultCategories.length; i++) {
-    try {
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order, table_type) VALUES ($1, $2, $3, $4) ON CONFLICT (type, value, table_type) DO NOTHING',
-        ['category', defaultCategories[i], i, null]
-      );
-    } catch (err) {
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order) VALUES ($1, $2, $3) ON CONFLICT (type, value) DO NOTHING',
-        ['category', defaultCategories[i], i]
-      );
-    }
-  }
-
-  // Insert default positions (will only insert if they don't exist)
-  for (let i = 0; i < defaultPositions.length; i++) {
-    try {
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order, table_type) VALUES ($1, $2, $3, $4) ON CONFLICT (type, value, table_type) DO NOTHING',
-        ['position', defaultPositions[i], i, null]
-      );
-    } catch (err) {
-      await pool.query(
-        'INSERT INTO dropdown_options (type, value, display_order) VALUES ($1, $2, $3) ON CONFLICT (type, value) DO NOTHING',
-        ['position', defaultPositions[i], i]
-      );
-    }
-  }
-
-  // Skip status insertion - status options are no longer managed through dropdown options
-  // (Status options use hardcoded defaults in the StatusSelect component)
+  await seedOptions('service', defaultServices);
+  await seedOptions('nationality', defaultNationalities);
+  await seedOptions('category', defaultCategories);
+  await seedOptions('position', defaultPositions);
 }
 
 module.exports = {

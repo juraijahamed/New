@@ -121,7 +121,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
 
         try {
             let documents = formData.documents;
-            
+
             // Upload files if new files are selected
             if (selectedFiles.length > 0) {
                 const uploadResponse = await fileUploadApi.uploadMultiple(selectedFiles);
@@ -407,8 +407,8 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                         >
                             <Upload size={16} style={{ color: '#A1887F' }} />
                             <span className="text-sm" style={{ color: '#8D6E63' }}>
-                                {selectedFiles.length > 0 
-                                    ? `${selectedFiles.length} file(s) selected` 
+                                {selectedFiles.length > 0
+                                    ? `${selectedFiles.length} file(s) selected`
                                     : 'Click to upload documents (multiple files allowed)'}
                             </span>
                             <input
@@ -457,27 +457,29 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                     />
                 </div>
 
-                <div className="flex gap-3 pt-4" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)' }}>
-                    <motion.button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 px-4 py-2.5 rounded-xl font-medium text-sm"
-                        style={{ border: '1px solid rgba(218, 165, 32, 0.3)', color: '#5D4037' }}
-                        whileHover={{ backgroundColor: 'rgba(218, 165, 32, 0.1)' }}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                        Cancel
-                    </motion.button>
-                    <motion.button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="flex-1 px-4 py-2.5 text-white rounded-xl font-medium text-sm disabled:opacity-50"
-                        style={{ background: 'linear-gradient(135deg, #DAA520 0%, #B8860B 100%)' }}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                        {isSubmitting ? 'Saving...' : sale ? 'Update Sale' : 'Add Sale'}
-                    </motion.button>
+                <div className="sticky bottom-0 bg-white pt-4 mt-4 pb-1" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)', zIndex: 10 }}>
+                    <div className="flex gap-3">
+                        <motion.button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-sm"
+                            style={{ border: '1px solid rgba(218, 165, 32, 0.3)', color: '#5D4037', background: 'white' }}
+                            whileHover={{ backgroundColor: 'rgba(218, 165, 32, 0.1)' }}
+                            whileTap={{ scale: 0.98 }}
+                        >
+                            Cancel
+                        </motion.button>
+                        <motion.button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="flex-1 px-4 py-2.5 text-white rounded-xl font-medium text-sm disabled:opacity-50"
+                            style={{ background: 'linear-gradient(135deg, #DAA520 0%, #B8860B 100%)' }}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                        >
+                            {isSubmitting ? 'Saving...' : sale ? 'Update Sale' : 'Add Sale'}
+                        </motion.button>
+                    </div>
                 </div>
             </form>
         </Modal>

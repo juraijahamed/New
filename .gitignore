@@ -15,9 +15,10 @@ dist/
 **/dist/
 build/
 **/build/
+release/
+**/release/
 
 out/
 **/out/
 
 .cursor/
-

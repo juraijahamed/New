@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-    expensesApi, salesApi, staffApi, supplierPaymentsApi, salaryPaymentsApi, dashboardApi,
+    expensesApi, salesApi, staffApi, supplierPaymentsApi, salaryPaymentsApi, dashboardApi, healthApi,
     type Expense, type Sale, type Staff, type SupplierPayment, type SalaryPayment, type DashboardStats
 } from '../services/api';
 
@@ -13,8 +13,9 @@ interface DataContextType {
     salaryPayments: SalaryPayment[];
     dashboardStats: DashboardStats | null;
 
-    // Loading states
+    // Loading and Connection states
     isLoading: boolean;
+    isServerOnline: boolean;
 
     // Refresh functions
     refreshExpenses: () => Promise<void>;
@@ -57,6 +58,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isServerOnline, setIsServerOnline] = useState(true);
+    const [lastSuccessfulRefresh, setLastSuccessfulRefresh] = useState<number>(0);
 
     // Refresh functions
     const refreshExpenses = useCallback(async () => {
@@ -100,10 +103,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 refreshSalaryPayments(),
                 refreshDashboard(),
             ]);
+            setLastSuccessfulRefresh(Date.now());
+            setIsServerOnline(true);
+        } catch (error) {
+            console.error('Failed to refresh data:', error);
+            // If it's a connection error, we'll let the health check handle it
+            const online = await healthApi.check();
+            setIsServerOnline(online);
         } finally {
             setIsLoading(false);
         }
     }, [refreshExpenses, refreshSales, refreshStaff, refreshSupplierPayments, refreshSalaryPayments, refreshDashboard]);
+
+    // Health Check Effect
+    useEffect(() => {
+        const checkHealth = async () => {
+            const online = await healthApi.check();
+            setIsServerOnline(online);
+        };
+
+        checkHealth();
+        const interval = setInterval(checkHealth, 5000); // Check every 5 seconds
+        return () => clearInterval(interval);
+    }, []);
+
+    // Auto-refresh when coming back online
+    useEffect(() => {
+        // If we just came online and haven't successfully refreshed in a while (e.g., 2 seconds)
+        // or if we are online but have no data (lastSuccessfulRefresh === 0)
+        if (isServerOnline && (Date.now() - lastSuccessfulRefresh > 2000)) {
+            refreshAll();
+        }
+    }, [isServerOnline, refreshAll, lastSuccessfulRefresh]);
 
     // Initial load
     useEffect(() => {
@@ -212,6 +243,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             salaryPayments,
             dashboardStats,
             isLoading,
+            isServerOnline,
             refreshExpenses,
             refreshSales,
             refreshStaff,

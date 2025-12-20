@@ -80,7 +80,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
                         <div className="h-0.5" style={{ background: 'linear-gradient(90deg, transparent, #DAA520, transparent)' }} />
 
                         {/* Content */}
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)] custom-scrollbar">
                             {children}
                         </div>
                     </motion.div>

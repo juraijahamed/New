@@ -151,14 +151,14 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
 
         try {
             let receiptUrl = formData.receipt_url;
-            
+
             // Upload file if a new file is selected
             if (selectedFile) {
                 try {
                     const uploadResponse = await fileUploadApi.uploadSingle(selectedFile);
                     receiptUrl = uploadResponse.path;
                 } catch (uploadError: any) {
-                    const errorMessage = uploadError.response?.status === 404 
+                    const errorMessage = uploadError.response?.status === 404
                         ? 'File upload endpoint not found. Please restart the server.'
                         : uploadError.message || 'Failed to upload file';
                     setError(errorMessage);
@@ -446,27 +446,29 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                         />
                     </div>
 
-                    <div className="flex gap-3 pt-4" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)' }}>
-                        <motion.button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-sm"
-                            style={{ border: '1px solid rgba(218, 165, 32, 0.3)', color: '#5D4037' }}
-                            whileHover={{ backgroundColor: 'rgba(218, 165, 32, 0.1)' }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            Cancel
-                        </motion.button>
-                        <motion.button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="flex-1 px-4 py-2.5 text-white rounded-xl font-medium text-sm disabled:opacity-50"
-                            style={{ background: 'linear-gradient(135deg, #DAA520 0%, #B8860B 100%)' }}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            {isSubmitting ? 'Saving...' : expense ? 'Update' : 'Add Expense'}
-                        </motion.button>
+                    <div className="sticky bottom-0 bg-white pt-4 mt-4 pb-1" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)', zIndex: 10 }}>
+                        <div className="flex gap-3">
+                            <motion.button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 px-4 py-2.5 rounded-xl font-medium text-sm"
+                                style={{ border: '1px solid rgba(218, 165, 32, 0.3)', color: '#5D4037', background: 'white' }}
+                                whileHover={{ backgroundColor: 'rgba(218, 165, 32, 0.1)' }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                Cancel
+                            </motion.button>
+                            <motion.button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="flex-1 px-4 py-2.5 text-white rounded-xl font-medium text-sm disabled:opacity-50"
+                                style={{ background: 'linear-gradient(135deg, #DAA520 0%, #B8860B 100%)' }}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                {isSubmitting ? 'Saving...' : expense ? 'Update' : 'Add Expense'}
+                            </motion.button>
+                        </div>
                     </div>
                 </form>
             )}
@@ -576,27 +578,29 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                         />
                     </div>
 
-                    <div className="flex gap-3 pt-4" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)' }}>
-                        <motion.button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-2.5 rounded-xl font-medium text-sm"
-                            style={{ border: '1px solid rgba(218, 165, 32, 0.3)', color: '#5D4037' }}
-                            whileHover={{ backgroundColor: 'rgba(218, 165, 32, 0.1)' }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            Cancel
-                        </motion.button>
-                        <motion.button
-                            type="submit"
-                            disabled={isSubmitting || staff.length === 0}
-                            className="flex-1 px-4 py-2.5 text-white rounded-xl font-medium text-sm disabled:opacity-50"
-                            style={{ background: 'linear-gradient(135deg, #DAA520 0%, #B8860B 100%)' }}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            {isSubmitting ? 'Saving...' : expense ? 'Update Payment' : 'Pay Salary'}
-                        </motion.button>
+                    <div className="sticky bottom-0 bg-white pt-4 mt-4 pb-1" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)', zIndex: 10 }}>
+                        <div className="flex gap-3">
+                            <motion.button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 px-4 py-2.5 rounded-xl font-medium text-sm"
+                                style={{ border: '1px solid rgba(218, 165, 32, 0.3)', color: '#5D4037', background: 'white' }}
+                                whileHover={{ backgroundColor: 'rgba(218, 165, 32, 0.1)' }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                Cancel
+                            </motion.button>
+                            <motion.button
+                                type="submit"
+                                disabled={isSubmitting || staff.length === 0}
+                                className="flex-1 px-4 py-2.5 text-white rounded-xl font-medium text-sm disabled:opacity-50"
+                                style={{ background: 'linear-gradient(135deg, #DAA520 0%, #B8860B 100%)' }}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                {isSubmitting ? 'Saving...' : expense ? 'Update Payment' : 'Pay Salary'}
+                            </motion.button>
+                        </div>
                     </div>
                 </form>
             )}

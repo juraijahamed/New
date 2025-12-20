@@ -1,19 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, LogOut, WifiOff, RefreshCw } from 'lucide-react';
-import { healthApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useData } from '../../context/DataContext';
 
 const ClockNotch = () => {
     const [indiaTime, setIndiaTime] = useState<string>('');
     const [uaeTime, setUaeTime] = useState<string>('');
-    const [isOnline, setIsOnline] = useState(true);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [indiaAnalog, setIndiaAnalog] = useState({ h: 0, m: 0, s: 0 });
     const [uaeAnalog, setUaeAnalog] = useState({ h: 0, m: 0, s: 0 });
     const [leftPosition, setLeftPosition] = useState<string>('50%');
     const { logout, user } = useAuth();
+    const { isServerOnline } = useData();
     const navigate = useNavigate();
     const notchRef = useRef<HTMLDivElement>(null);
 
@@ -45,16 +45,7 @@ const ClockNotch = () => {
         return () => clearInterval(interval);
     }, []);
 
-    useEffect(() => {
-        const checkOnline = async () => {
-            const online = await healthApi.check();
-            setIsOnline(online);
-        };
 
-        checkOnline();
-        const interval = setInterval(checkOnline, 10000);
-        return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
         const calculateCenter = () => {
@@ -62,7 +53,7 @@ const ClockNotch = () => {
             const mainElement = document.querySelector('main.flex-1');
             if (mainElement) {
                 const mainRect = mainElement.getBoundingClientRect();
-                
+
                 // Calculate the center point of the main content area
                 // Since we use translateX(-50%), the left position should be the center point
                 const centerX = mainRect.left + (mainRect.width / 2);
@@ -74,16 +65,16 @@ const ClockNotch = () => {
         // Calculate on mount and resize
         calculateCenter();
         window.addEventListener('resize', calculateCenter);
-        
+
         // Also recalculate after a short delay to ensure layout is complete
         const timeoutId = setTimeout(() => {
             calculateCenter();
         }, 100);
-        
+
         // Use ResizeObserver for more accurate updates
         const mainElement = document.querySelector('main.flex-1');
         let resizeObserver: ResizeObserver | null = null;
-        
+
         if (mainElement && 'ResizeObserver' in window) {
             resizeObserver = new ResizeObserver(() => {
                 calculateCenter();
@@ -184,7 +175,7 @@ const ClockNotch = () => {
                 >
                     {/* Online Status */}
                     <div className="flex items-center gap-1.5">
-                        {isOnline ? (
+                        {isServerOnline ? (
                             <>
                                 <motion.div
                                     className="w-2 h-2 rounded-full"
