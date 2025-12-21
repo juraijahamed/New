@@ -5,6 +5,8 @@ import type { Sale } from '../../services/api';
 import { fileUploadApi, dropdownOptionsApi } from '../../services/api';
 import { Upload, X } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useSuggestions } from '../../context/SuggestionContext';
+import AutocompleteInput from '../UI/AutocompleteInput';
 
 interface SaleModalProps {
     isOpen: boolean;
@@ -14,6 +16,7 @@ interface SaleModalProps {
 
 const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
     const { addSale, updateSale } = useData();
+    const suggestions = useSuggestions();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [customService, setCustomService] = useState('');
@@ -261,30 +264,32 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Agency/Client</label>
-                        <input
-                            type="text"
-                            required
+                        <AutocompleteInput
                             value={formData.agency}
-                            onChange={(e) => setFormData({ ...formData, agency: e.target.value })}
-                            className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
-                            style={inputStyle}
-                            onFocus={(e) => e.target.style.borderColor = '#DAA520'}
-                            onBlur={(e) => e.target.style.borderColor = '#e8ddd0'}
+                            onChange={(value) => setFormData({ ...formData, agency: value })}
+                            suggestions={suggestions.agencies}
                             placeholder="Client or Agency name"
+                            required
+                            style={{
+                                border: '2px solid #e8ddd0',
+                                background: '#fdf9f3',
+                                color: '#5D4037'
+                            }}
                         />
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Supplier</label>
-                        <input
-                            type="text"
+                        <AutocompleteInput
                             value={formData.supplier}
-                            onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                            className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
-                            style={inputStyle}
-                            onFocus={(e) => e.target.style.borderColor = '#DAA520'}
-                            onBlur={(e) => e.target.style.borderColor = '#e8ddd0'}
+                            onChange={(value) => setFormData({ ...formData, supplier: value })}
+                            suggestions={suggestions.suppliers}
                             placeholder="Supplier name"
+                            style={{
+                                border: '2px solid #e8ddd0',
+                                background: '#fdf9f3',
+                                color: '#5D4037'
+                            }}
                         />
                     </div>
                 </div>

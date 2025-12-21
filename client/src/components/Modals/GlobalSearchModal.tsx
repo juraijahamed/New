@@ -22,6 +22,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
     const { expenses, sales, staff, supplierPayments } = useData();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+    const [activeFilter, setActiveFilter] = useState<'all' | 'expense' | 'sale' | 'staff' | 'supplier_payment'>('all');
     const inputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
 
@@ -40,100 +41,140 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
         const results: SearchResult[] = [];
 
         // Search Expenses
-        expenses.forEach((expense) => {
-            const matches = 
-                expense.description?.toLowerCase().includes(query) ||
-                expense.category?.toLowerCase().includes(query) ||
-                expense.remarks?.toLowerCase().includes(query) ||
-                expense.amount?.toString().includes(query);
+        if (activeFilter === 'all' || activeFilter === 'expense') {
+            expenses.forEach((expense) => {
+                const matches =
+                    expense.description?.toLowerCase().includes(query) ||
+                    expense.category?.toLowerCase().includes(query) ||
+                    expense.remarks?.toLowerCase().includes(query) ||
+                    expense.amount?.toString().includes(query);
 
-            if (matches) {
-                results.push({
-                    type: 'expense',
-                    id: expense.id!,
-                    title: expense.description || 'Expense',
-                    subtitle: `${expense.category || 'Uncategorized'} • ${expense.amount?.toFixed(2) || '0.00'}`,
-                    data: expense,
-                });
-            }
-        });
+                if (matches) {
+                    results.push({
+                        type: 'expense',
+                        id: expense.id!,
+                        title: expense.description || 'Expense',
+                        subtitle: `${expense.category || 'Uncategorized'} • ${expense.amount?.toFixed(2) || '0.00'}`,
+                        data: expense,
+                    });
+                }
+            });
+        }
 
         // Search Sales
-        sales.forEach((sale) => {
-            const matches =
-                sale.agency?.toLowerCase().includes(query) ||
-                sale.supplier?.toLowerCase().includes(query) ||
-                sale.national?.toLowerCase().includes(query) ||
-                sale.service?.toLowerCase().includes(query) ||
-                sale.passport_number?.toLowerCase().includes(query) ||
-                sale.remarks?.toLowerCase().includes(query) ||
-                sale.sales_rate?.toString().includes(query);
+        if (activeFilter === 'all' || activeFilter === 'sale') {
+            sales.forEach((sale) => {
+                const matches =
+                    sale.agency?.toLowerCase().includes(query) ||
+                    sale.supplier?.toLowerCase().includes(query) ||
+                    sale.national?.toLowerCase().includes(query) ||
+                    sale.service?.toLowerCase().includes(query) ||
+                    sale.passport_number?.toLowerCase().includes(query) ||
+                    sale.remarks?.toLowerCase().includes(query) ||
+                    sale.sales_rate?.toString().includes(query);
 
-            if (matches) {
-                results.push({
-                    type: 'sale',
-                    id: sale.id!,
-                    title: `${sale.agency || 'Agency'} - ${sale.service || 'Service'}`,
-                    subtitle: `${sale.supplier || 'Supplier'} • ${sale.national || 'National'} • ${sale.sales_rate?.toFixed(2) || '0.00'}`,
-                    data: sale,
-                });
-            }
-        });
+                if (matches) {
+                    results.push({
+                        type: 'sale',
+                        id: sale.id!,
+                        title: `${sale.agency || 'Agency'} - ${sale.service || 'Service'}`,
+                        subtitle: `${sale.supplier || 'Supplier'} • ${sale.national || 'National'} • ${sale.sales_rate?.toFixed(2) || '0.00'}`,
+                        data: sale,
+                    });
+                }
+            });
+        }
 
         // Search Staff
-        staff.forEach((member) => {
-            const matches =
-                member.name?.toLowerCase().includes(query) ||
-                member.position?.toLowerCase().includes(query) ||
-                member.phone?.toLowerCase().includes(query) ||
-                member.salary?.toString().includes(query);
+        if (activeFilter === 'all' || activeFilter === 'staff') {
+            staff.forEach((member) => {
+                const matches =
+                    member.name?.toLowerCase().includes(query) ||
+                    member.position?.toLowerCase().includes(query) ||
+                    member.phone?.toLowerCase().includes(query) ||
+                    member.salary?.toString().includes(query);
 
-            if (matches) {
-                results.push({
-                    type: 'staff',
-                    id: member.id!,
-                    title: member.name || 'Staff Member',
-                    subtitle: `${member.position || 'Position'} • ${member.phone || 'No Phone'}`,
-                    data: member,
-                });
-            }
-        });
+                if (matches) {
+                    results.push({
+                        type: 'staff',
+                        id: member.id!,
+                        title: member.name || 'Staff Member',
+                        subtitle: `${member.position || 'Position'} • ${member.phone || 'No Phone'}`,
+                        data: member,
+                    });
+                }
+            });
+        }
 
         // Search Supplier Payments
-        supplierPayments.forEach((payment) => {
-            const matches =
-                payment.supplier_name?.toLowerCase().includes(query) ||
-                payment.remarks?.toLowerCase().includes(query) ||
-                payment.amount?.toString().includes(query);
+        if (activeFilter === 'all' || activeFilter === 'supplier_payment') {
+            supplierPayments.forEach((payment) => {
+                const matches =
+                    payment.supplier_name?.toLowerCase().includes(query) ||
+                    payment.remarks?.toLowerCase().includes(query) ||
+                    payment.amount?.toString().includes(query);
 
-            if (matches) {
-                results.push({
-                    type: 'supplier_payment',
-                    id: payment.id!,
-                    title: payment.supplier_name || 'Supplier Payment',
-                    subtitle: `${payment.amount?.toFixed(2) || '0.00'} • ${payment.date || 'Date'}`,
-                    data: payment,
-                });
-            }
-        });
+                if (matches) {
+                    results.push({
+                        type: 'supplier_payment',
+                        id: payment.id!,
+                        title: payment.supplier_name || 'Supplier Payment',
+                        subtitle: `${payment.amount?.toFixed(2) || '0.00'} • ${payment.date || 'Date'}`,
+                        data: payment,
+                    });
+                }
+            });
+        }
 
         return results;
-    }, [searchQuery, expenses, sales, staff, supplierPayments]);
+    }, [searchQuery, activeFilter, expenses, sales, staff, supplierPayments]);
 
     const handleResultClick = (result: SearchResult) => {
+        const query = searchQuery.toLowerCase().trim();
+        let highlightKey = '';
+
+        // Determine which field matched the query for highlighting
+        if (result.type === 'expense') {
+            const exp = result.data as Expense;
+            if (exp.description?.toLowerCase().includes(query)) highlightKey = 'description';
+            else if (exp.category?.toLowerCase().includes(query)) highlightKey = 'category';
+            else if (exp.remarks?.toLowerCase().includes(query)) highlightKey = 'remarks';
+            else if (exp.amount?.toString().includes(query)) highlightKey = 'amount';
+        } else if (result.type === 'sale') {
+            const sale = result.data as Sale;
+            if (sale.agency?.toLowerCase().includes(query)) highlightKey = 'agency';
+            else if (sale.supplier?.toLowerCase().includes(query)) highlightKey = 'supplier';
+            else if (sale.national?.toLowerCase().includes(query)) highlightKey = 'national';
+            else if (sale.service?.toLowerCase().includes(query)) highlightKey = 'service';
+            else if (sale.passport_number?.toLowerCase().includes(query)) highlightKey = 'passport_number';
+            else if (sale.remarks?.toLowerCase().includes(query)) highlightKey = 'remarks';
+            else if (sale.sales_rate?.toString().includes(query)) highlightKey = 'sales_rate';
+        } else if (result.type === 'supplier_payment') {
+            const pay = result.data as SupplierPayment;
+            if (pay.supplier_name?.toLowerCase().includes(query)) highlightKey = 'supplier_name';
+            else if (pay.remarks?.toLowerCase().includes(query)) highlightKey = 'remarks';
+            else if (pay.amount?.toString().includes(query)) highlightKey = 'amount';
+        }
+
+        const highlightParams = `?highlightId=${result.id}${highlightKey ? `&highlightKey=${highlightKey}` : ''}`;
+
+        // Reset search state before navigating
+        setSearchQuery('');
+        setActiveFilter('all');
+
         // Navigate to the appropriate page based on type
         switch (result.type) {
             case 'expense':
-                navigate('/expenses');
+                navigate(`/expenses${highlightParams}`);
                 break;
             case 'sale':
-                navigate('/sales');
+                navigate(`/sales${highlightParams}`);
                 break;
             case 'staff':
-                navigate('/settings');
+                navigate(`/settings${highlightParams}`);
                 break;
             case 'supplier_payment':
-                navigate('/supplier-payments');
+                navigate(`/supplier-payments${highlightParams}`);
                 break;
         }
         onClose();
@@ -169,6 +210,12 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
         }
     };
 
+    const handleClose = () => {
+        setSearchQuery('');
+        setActiveFilter('all');
+        onClose();
+    };
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -178,7 +225,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4"
                     style={{ background: 'rgba(93, 64, 55, 0.6)', backdropFilter: 'blur(8px)' }}
-                    onClick={onClose}
+                    onClick={handleClose}
                 >
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0, y: -20 }}
@@ -221,7 +268,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                                     }}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Escape') {
-                                            onClose();
+                                            handleClose();
                                         }
                                     }}
                                 />
@@ -238,6 +285,40 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                                     </motion.button>
                                 )}
                             </div>
+                        </div>
+
+                        {/* Table Controllers */}
+                        <div className="px-6 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ borderBottom: '1px solid rgba(218, 165, 32, 0.1)' }}>
+                            <button
+                                onClick={() => setActiveFilter('all')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${activeFilter === 'all' ? 'bg-gold-gradient text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                All Tables
+                            </button>
+                            <button
+                                onClick={() => setActiveFilter('sale')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${activeFilter === 'sale' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                <ShoppingCart size={14} /> Sales
+                            </button>
+                            <button
+                                onClick={() => setActiveFilter('expense')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${activeFilter === 'expense' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                <FileText size={14} /> Expenses
+                            </button>
+                            <button
+                                onClick={() => setActiveFilter('supplier_payment')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${activeFilter === 'supplier_payment' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                <CreditCard size={14} /> Suppliers
+                            </button>
+                            <button
+                                onClick={() => setActiveFilter('staff')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${activeFilter === 'staff' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                <Users size={14} /> Staff
+                            </button>
                         </div>
 
                         {/* Gold accent line */}
@@ -257,8 +338,8 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                                                 onClick={() => handleResultClick(result)}
                                                 className="px-4 py-3 rounded-xl cursor-pointer transition-all mb-1"
                                                 style={{
-                                                    background: selectedResult?.id === result.id 
-                                                        ? 'rgba(218, 165, 32, 0.1)' 
+                                                    background: selectedResult?.id === result.id
+                                                        ? 'rgba(218, 165, 32, 0.1)'
                                                         : 'transparent'
                                                 }}
                                                 onMouseEnter={() => setSelectedResult(result)}

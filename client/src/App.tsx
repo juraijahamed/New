@@ -2,6 +2,7 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useMemo } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
+import { SuggestionProvider } from './context/SuggestionContext';
 import Sidebar from './components/Layout/Sidebar';
 import TitleBar from './components/Layout/TitleBar';
 import ClockNotch from './components/UI/ClockNotch';
@@ -60,43 +61,45 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DataProvider>
-              <div
-                className="flex h-screen overflow-hidden font-sans"
-                style={{ background: 'linear-gradient(135deg, #faf8f5 0%, #f5f0e8 50%, #ece4d9 100%)' }}
-              >
-                {/* Clock Notch */}
-                <ClockNotch />
-
-                <Sidebar />
-                <main
-                  className="flex-1 overflow-y-auto overflow-x-hidden"
-                  style={{
-                    marginTop: topOffset,
-                    padding: `${contentPadding}px`,
-                    height: `calc(100vh - ${topOffset}px)`
-                  }}
+              <SuggestionProvider>
+                <div
+                  className="flex h-screen overflow-hidden font-sans"
+                  style={{ background: 'linear-gradient(135deg, #faf8f5 0%, #f5f0e8 50%, #ece4d9 100%)' }}
                 >
-                  <div
-                    className="h-full overflow-hidden"
+                  {/* Clock Notch */}
+                  <ClockNotch />
+
+                  <Sidebar />
+                  <main
+                    className="flex-1 overflow-y-auto overflow-x-hidden"
                     style={{
-                      background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.78) 100%)',
-                      backdropFilter: 'blur(12px)',
-                      border: '1px solid rgba(218, 165, 32, 0.12)',
-                      boxShadow: '0 16px 48px -20px rgba(62, 39, 35, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45)',
-                      borderRadius: 0
+                      marginTop: topOffset,
+                      padding: `${contentPadding}px`,
+                      height: `calc(100vh - ${topOffset}px)`
                     }}
                   >
-                    <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="/expenses" element={<Expenses />} />
-                      <Route path="/sales" element={<Sales />} />
-                      <Route path="/supplier-payments" element={<SupplierPayments />} />
-                      <Route path="/reports" element={<Reports />} />
-                      <Route path="/settings" element={<Settings />} />
-                    </Routes>
-                  </div>
-                </main>
-              </div>
+                    <div
+                      className="h-full overflow-hidden"
+                      style={{
+                        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.78) 100%)',
+                        backdropFilter: 'blur(12px)',
+                        border: '1px solid rgba(218, 165, 32, 0.12)',
+                        boxShadow: '0 16px 48px -20px rgba(62, 39, 35, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45)',
+                        borderRadius: 0
+                      }}
+                    >
+                      <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/expenses" element={<Expenses />} />
+                        <Route path="/sales" element={<Sales />} />
+                        <Route path="/supplier-payments" element={<SupplierPayments />} />
+                        <Route path="/reports" element={<Reports />} />
+                        <Route path="/settings" element={<Settings />} />
+                      </Routes>
+                    </div>
+                  </main>
+                </div>
+              </SuggestionProvider>
             </DataProvider>
           </ProtectedRoute>
         }

@@ -217,15 +217,6 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
             } else {
                 // Add new
                 await addSalaryPayment(salaryPayment);
-
-                await addExpense({
-                    description: `Salary - ${selectedStaff?.name || salaryData.staff_name} (${salaryData.paid_month})`,
-                    amount: parseFloat(salaryData.amount),
-                    category: 'Salary',
-                    date: salaryData.date,
-                    remarks: salaryData.remarks,
-                    status: 'draft',
-                });
             }
 
             onClose();

@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import io from 'socket.io-client';
 import {
     expensesApi, salesApi, staffApi, supplierPaymentsApi, salaryPaymentsApi, dashboardApi, healthApi,
     type Expense, type Sale, type Staff, type SupplierPayment, type SalaryPayment, type DashboardStats
 } from '../services/api';
+
+const API_URL = 'http://localhost:3001';
+const socket = io(API_URL);
 
 interface DataContextType {
     // Data
@@ -107,13 +111,98 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsServerOnline(true);
         } catch (error) {
             console.error('Failed to refresh data:', error);
-            // If it's a connection error, we'll let the health check handle it
             const online = await healthApi.check();
             setIsServerOnline(online);
         } finally {
             setIsLoading(false);
         }
     }, [refreshExpenses, refreshSales, refreshStaff, refreshSupplierPayments, refreshSalaryPayments, refreshDashboard]);
+
+    // Socket.IO Event Listeners
+    useEffect(() => {
+        // Expense events
+        socket.on('expense:created', (expense: Expense) => {
+            setExpenses(prev => [expense, ...prev]);
+            refreshDashboard();
+        });
+        socket.on('expense:updated', (expense: Expense) => {
+            setExpenses(prev => prev.map(e => e.id === expense.id ? expense : e));
+            refreshDashboard();
+        });
+        socket.on('expense:deleted', ({ id }: { id: number }) => {
+            setExpenses(prev => prev.filter(e => e.id !== id));
+            refreshDashboard();
+        });
+
+        // Sale events
+        socket.on('sale:created', (sale: Sale) => {
+            setSales(prev => [sale, ...prev]);
+            refreshDashboard();
+        });
+        socket.on('sale:updated', (sale: Sale) => {
+            setSales(prev => prev.map(s => s.id === sale.id ? sale : s));
+            refreshDashboard();
+        });
+        socket.on('sale:deleted', ({ id }: { id: number }) => {
+            setSales(prev => prev.filter(s => s.id !== id));
+            refreshDashboard();
+        });
+
+        // Supplier payment events
+        socket.on('supplier_payment:created', (payment: SupplierPayment) => {
+            setSupplierPayments(prev => [payment, ...prev]);
+            refreshDashboard();
+        });
+        socket.on('supplier_payment:updated', (payment: SupplierPayment) => {
+            setSupplierPayments(prev => prev.map(p => p.id === payment.id ? payment : p));
+            refreshDashboard();
+        });
+        socket.on('supplier_payment:deleted', ({ id }: { id: number }) => {
+            setSupplierPayments(prev => prev.filter(p => p.id !== id));
+            refreshDashboard();
+        });
+
+        // Salary payment events
+        socket.on('salary_payment:created', (payment: SalaryPayment) => {
+            setSalaryPayments(prev => [payment, ...prev]);
+            refreshDashboard();
+        });
+        socket.on('salary_payment:updated', (payment: SalaryPayment) => {
+            setSalaryPayments(prev => prev.map(p => p.id === payment.id ? payment : p));
+            refreshDashboard();
+        });
+        socket.on('salary_payment:deleted', ({ id }: { id: number }) => {
+            setSalaryPayments(prev => prev.filter(p => p.id !== id));
+            refreshDashboard();
+        });
+
+        // Connection status
+        socket.on('connect', () => {
+            console.log('Socket.IO connected');
+            setIsServerOnline(true);
+        });
+        socket.on('disconnect', () => {
+            console.log('Socket.IO disconnected');
+            setIsServerOnline(false);
+        });
+
+        return () => {
+            socket.off('expense:created');
+            socket.off('expense:updated');
+            socket.off('expense:deleted');
+            socket.off('sale:created');
+            socket.off('sale:updated');
+            socket.off('sale:deleted');
+            socket.off('supplier_payment:created');
+            socket.off('supplier_payment:updated');
+            socket.off('supplier_payment:deleted');
+            socket.off('salary_payment:created');
+            socket.off('salary_payment:updated');
+            socket.off('salary_payment:deleted');
+            socket.off('connect');
+            socket.off('disconnect');
+        };
+    }, [refreshDashboard]);
 
     // Health Check Effect
     useEffect(() => {
@@ -123,14 +212,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         checkHealth();
-        const interval = setInterval(checkHealth, 5000); // Check every 5 seconds
+        const interval = setInterval(checkHealth, 5000);
         return () => clearInterval(interval);
     }, []);
 
     // Auto-refresh when coming back online
     useEffect(() => {
-        // If we just came online and haven't successfully refreshed in a while (e.g., 2 seconds)
-        // or if we are online but have no data (lastSuccessfulRefresh === 0)
         if (isServerOnline && (Date.now() - lastSuccessfulRefresh > 2000)) {
             refreshAll();
         }
@@ -141,43 +228,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshAll();
     }, [refreshAll]);
 
+    // Helper to get current user_id from localStorage
+    const getCurrentUserId = (): number | undefined => {
+        try {
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                const user = JSON.parse(userStr);
+                return user?.id;
+            }
+        } catch (e) {
+            console.error('Error getting user from localStorage:', e);
+        }
+        return undefined;
+    };
+
     // CRUD Operations
     const addExpense = async (expense: Omit<Expense, 'id'>) => {
-        const newExpense = await expensesApi.create(expense);
-        await refreshExpenses();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const expenseWithUser = { ...expense, user_id };
+        const newExpense = await expensesApi.create(expenseWithUser);
+        // No need to manually update state - Socket.IO event will handle it
         return newExpense;
     };
 
     const updateExpense = async (id: number, expense: Partial<Expense>) => {
-        await expensesApi.update(id, expense);
-        await refreshExpenses();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const expenseWithUser = { ...expense, user_id };
+        await expensesApi.update(id, expenseWithUser);
+        // Socket.IO event will update state
     };
 
     const deleteExpense = async (id: number) => {
         await expensesApi.delete(id);
-        await refreshExpenses();
-        await refreshDashboard();
+        // Socket.IO event will update state
     };
 
     const addSale = async (sale: Omit<Sale, 'id'>) => {
-        const newSale = await salesApi.create(sale);
-        await refreshSales();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const saleWithUser = { ...sale, user_id };
+        const newSale = await salesApi.create(saleWithUser);
         return newSale;
     };
 
     const updateSale = async (id: number, sale: Partial<Sale>) => {
-        await salesApi.update(id, sale);
-        await refreshSales();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const saleWithUser = { ...sale, user_id };
+        await salesApi.update(id, saleWithUser);
     };
 
     const deleteSale = async (id: number) => {
         await salesApi.delete(id);
-        await refreshSales();
-        await refreshDashboard();
     };
 
     const addStaff = async (staffData: Omit<Staff, 'id'>) => {
@@ -197,41 +297,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const addSupplierPayment = async (payment: Omit<SupplierPayment, 'id'>) => {
-        const newPayment = await supplierPaymentsApi.create(payment);
-        await refreshSupplierPayments();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const paymentWithUser = { ...payment, user_id };
+        const newPayment = await supplierPaymentsApi.create(paymentWithUser);
         return newPayment;
     };
 
     const updateSupplierPayment = async (id: number, payment: Partial<SupplierPayment>) => {
-        await supplierPaymentsApi.update(id, payment);
-        await refreshSupplierPayments();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const paymentWithUser = { ...payment, user_id };
+        await supplierPaymentsApi.update(id, paymentWithUser);
     };
 
     const deleteSupplierPayment = async (id: number) => {
         await supplierPaymentsApi.delete(id);
-        await refreshSupplierPayments();
-        await refreshDashboard();
     };
 
     const addSalaryPayment = async (payment: Omit<SalaryPayment, 'id'>) => {
-        const newPayment = await salaryPaymentsApi.create(payment);
-        await refreshSalaryPayments();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const paymentWithUser = { ...payment, user_id };
+        const newPayment = await salaryPaymentsApi.create(paymentWithUser);
         return newPayment;
     };
 
     const updateSalaryPayment = async (id: number, payment: Partial<SalaryPayment>) => {
-        await salaryPaymentsApi.update(id, payment);
-        await refreshSalaryPayments();
-        await refreshDashboard();
+        const user_id = getCurrentUserId();
+        const paymentWithUser = { ...payment, user_id };
+        await salaryPaymentsApi.update(id, paymentWithUser);
     };
 
     const deleteSalaryPayment = async (id: number) => {
         await salaryPaymentsApi.delete(id);
-        await refreshSalaryPayments();
-        await refreshDashboard();
     };
 
     return (

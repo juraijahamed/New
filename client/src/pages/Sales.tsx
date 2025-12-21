@@ -9,10 +9,20 @@ import { StatusSelect } from '../components/UI/StatusSelect';
 import { EditableCell } from '../components/UI/EditableCell';
 import { DocumentCell } from '../components/UI/DocumentCell';
 import { Toast } from '../components/UI/Toast';
+import { useSearchParams } from 'react-router-dom';
 import type { Sale } from '../services/api';
 
 const Sales = () => {
     const { sales, isLoading, updateSale } = useData();
+    const [searchParams] = useSearchParams();
+    const highlightId = searchParams.get('highlightId');
+    const highlightKey = searchParams.get('highlightKey');
+
+    // Strict ID Ascending sort for a cleaner "series" view (1, 2, 3...)
+    const sortedSales = useMemo(() => {
+        return [...sales].sort((a, b) => (a.id || 0) - (b.id || 0));
+    }, [sales]);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
     const [previewFile, setPreviewFile] = useState<{ url: string; title: string; saleId?: number } | null>(null);
@@ -32,11 +42,8 @@ const Sales = () => {
                 accessorKey: 'id',
                 header: 'ID',
                 cell: ({ row }) => (
-                    <div 
-                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        onClick={(e) => {
-                            // Allow single clicks to bubble up for cell selection
-                        }}
+                    <div
+                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-cell hover:bg-black/[0.02] transition-colors"
                         onDoubleClick={(e) => {
                             e.stopPropagation();
                             handleEdit(row.original);
@@ -188,7 +195,7 @@ const Sales = () => {
                         onPreview={(url, title) => {
                             setPreviewFile({ url, title, saleId: row.original.id });
                         }}
-                        multiple={true}
+                        multiple={false}
                     />
                 ),
             },
@@ -218,112 +225,116 @@ const Sales = () => {
                 onClose={() => setShowToast(false)}
             />
             <div className="p-2.5 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-8">
-                <div>
-                    <h1 className="text-3xl font-bold text-left text-[var(--dark-brown)] flex items-center gap-3">
-                        <BarChart3 className="text-green-600" />
-                        Sales
-                    </h1>
-                    <p className="text-gray-500 mt-1">
-                        Track your revenue and transactions.
-                        <span className="ml-2 font-semibold text-gray-700">
-                            Total: AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className="ml-2 font-semibold text-green-600">
-                            Profit: AED {totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="bg-white rounded-lg px-4 py-2.5 border border-green-200 shadow-sm">
-                        <p className="text-xs text-gray-500 mb-0.5">Total Sales</p>
-                        <p className="text-lg font-bold text-green-600 font-mono">
-                            AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-left text-[var(--dark-brown)] flex items-center gap-3">
+                            <BarChart3 className="text-green-600" />
+                            Sales
+                        </h1>
+                        <p className="text-gray-500 mt-1">
+                            Track your revenue and transactions.
+                            <span className="ml-2 font-semibold text-gray-700">
+                                Total: AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
+                            <span className="ml-2 font-semibold text-green-600">
+                                Profit: AED {totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
                         </p>
                     </div>
-                    <button
-                        onClick={() => { setSelectedSale(null); setIsModalOpen(true); }}
-                        className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
-                    >
-                        <PlusCircle size={20} />
-                        New Sale
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white rounded-lg px-4 py-2.5 border border-green-200 shadow-sm">
+                            <p className="text-xs text-gray-500 mb-0.5">Total Sales</p>
+                            <p className="text-lg font-bold text-green-600 font-mono">
+                                AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => { setSelectedSale(null); setIsModalOpen(true); }}
+                            className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
+                        >
+                            <PlusCircle size={20} />
+                            New Sale
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div className="flex-1 overflow-auto bg-white rounded-md shadow-sm border border-gray-100">
-                {isLoading ? (
-                    <div className="flex items-center justify-center h-64">
-                        <Loader2 className="animate-spin text-green-600" size={32} />
-                    </div>
-                ) : sales.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                        <div className="text-6xl mb-4">??</div>
-                        <p className="text-lg">No sales recorded yet</p>
-                        <p className="text-sm">Click "New Sale" to add your first entry</p>
-                    </div>
-                ) : (
-                    <DataTable columns={columns} data={sales} />
-                )}
-            </div>
+                <div className="flex-1 overflow-auto bg-white rounded-md shadow-sm border border-gray-100">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center h-64">
+                            <Loader2 className="animate-spin text-green-600" size={32} />
+                        </div>
+                    ) : sales.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                            <div className="text-6xl mb-4">??</div>
+                            <p className="text-lg">No sales recorded yet</p>
+                            <p className="text-sm">Click "New Sale" to add your first entry</p>
+                        </div>
+                    ) : (
+                        <DataTable
+                            columns={columns}
+                            data={sortedSales}
+                            highlightInfo={highlightId ? { rowId: highlightId, columnKey: highlightKey || undefined } : null}
+                        />
+                    )}
+                </div>
 
-            {/* Modals */}
-            <SaleModal
-                isOpen={isModalOpen}
-                onClose={() => { setIsModalOpen(false); setSelectedSale(null); }}
-                sale={selectedSale}
-            />
+                {/* Modals */}
+                <SaleModal
+                    isOpen={isModalOpen}
+                    onClose={() => { setIsModalOpen(false); setSelectedSale(null); }}
+                    sale={selectedSale}
+                />
 
-            <FilePreviewModal
-                isOpen={!!previewFile}
-                onClose={() => setPreviewFile(null)}
-                fileUrl={previewFile?.url}
-                title={previewFile?.title}
-                onEdit={() => {
-                    if (previewFile?.saleId) {
-                        const sale = sales.find(s => s.id === previewFile.saleId);
-                        if (sale) {
-                            setSelectedSale(sale);
-                            setIsModalOpen(true);
+                <FilePreviewModal
+                    isOpen={!!previewFile}
+                    onClose={() => setPreviewFile(null)}
+                    fileUrl={previewFile?.url}
+                    title={previewFile?.title}
+                    onEdit={() => {
+                        if (previewFile?.saleId) {
+                            const sale = sales.find(s => s.id === previewFile.saleId);
+                            if (sale) {
+                                setSelectedSale(sale);
+                                setIsModalOpen(true);
+                                setPreviewFile(null);
+                            }
+                        }
+                    }}
+                    onRemove={async () => {
+                        if (previewFile?.saleId) {
+                            await updateSale(previewFile.saleId, { documents: '' });
                             setPreviewFile(null);
                         }
-                    }
-                }}
-                onRemove={async () => {
-                    if (previewFile?.saleId) {
-                        await updateSale(previewFile.saleId, { documents: '' });
-                        setPreviewFile(null);
-                    }
-                }}
-                onDownload={async () => {
-                    if (previewFile?.url) {
-                        try {
-                            const response = await fetch(previewFile.url);
-                            if (!response.ok) throw new Error('Failed to fetch file');
-                            
-                            const blob = await response.blob();
-                            const url = window.URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            const filename = previewFile.url.split('/').pop() || 'file';
-                            link.download = filename;
-                            link.style.display = 'none';
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            window.URL.revokeObjectURL(url);
-                            
-                            setToastMessage(`File downloaded: ${filename}`);
-                            setShowToast(true);
-                        } catch (error) {
-                            console.error('Download error:', error);
-                            setToastMessage('Failed to download file');
-                            setShowToast(true);
+                    }}
+                    onDownload={async () => {
+                        if (previewFile?.url) {
+                            try {
+                                const response = await fetch(previewFile.url);
+                                if (!response.ok) throw new Error('Failed to fetch file');
+
+                                const blob = await response.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                const filename = previewFile.url.split('/').pop() || 'file';
+                                link.download = filename;
+                                link.style.display = 'none';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                window.URL.revokeObjectURL(url);
+
+                                setToastMessage(`File downloaded: ${filename}`);
+                                setShowToast(true);
+                            } catch (error) {
+                                console.error('Download error:', error);
+                                setToastMessage('Failed to download file');
+                                setShowToast(true);
+                            }
                         }
-                    }
-                }}
-            />
-        </div>
+                    }}
+                />
+            </div>
         </>
     );
 };

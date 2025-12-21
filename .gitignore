@@ -22,3 +22,8 @@ out/
 **/out/
 
 .cursor/
+
+# amplify
+.amplify
+amplify_outputs*
+amplifyconfiguration*

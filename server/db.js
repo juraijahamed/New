@@ -162,6 +162,57 @@ async function initSchema() {
     console.error('Error updating unique constraint:', err);
   }
 
+  // Add created_by_user_id and updated_by_user_id columns to transaction tables
+  const transactionTables = ['expenses', 'sales', 'supplier_payments', 'salary_payments'];
+  for (const table of transactionTables) {
+    try {
+      // Check if created_by_user_id exists
+      const createdByCheck = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='${table}' AND column_name='created_by_user_id'
+      `);
+      if (createdByCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE ${table} ADD COLUMN created_by_user_id INTEGER`);
+      }
+
+      // Check if updated_by_user_id exists
+      const updatedByCheck = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='${table}' AND column_name='updated_by_user_id'
+      `);
+      if (updatedByCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE ${table} ADD COLUMN updated_by_user_id INTEGER`);
+      }
+
+      // Migrate existing user_id to created_by_user_id if created_by_user_id is null
+      await pool.query(`
+        UPDATE ${table} 
+        SET created_by_user_id = user_id 
+        WHERE created_by_user_id IS NULL AND user_id IS NOT NULL
+      `);
+
+      // Check if updated_at exists
+      const updatedAtCheck = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='${table}' AND column_name='updated_at'
+      `);
+      if (updatedAtCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE ${table} ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW()`);
+        // Set updated_at to created_at for existing records
+        await pool.query(`
+          UPDATE ${table} 
+          SET updated_at = created_at 
+          WHERE updated_at IS NULL
+        `);
+      }
+    } catch (err) {
+      console.error(`Error adding created_by/updated_by columns to ${table}:`, err);
+    }
+  }
+
   // Cleanup: Remove existing duplicates before seeding
   try {
     await pool.query(`

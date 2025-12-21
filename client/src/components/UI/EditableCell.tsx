@@ -51,7 +51,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
 
     const handleBlur = async () => {
         if (!isEditing) return;
-        
+
         try {
             let finalValue: string | number;
             if (parseValue) {
@@ -93,7 +93,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
 
     const handleNumberChange = (delta: number) => {
         if (type !== 'number') return;
-        
+
         const currentValue = parseFloat(editValue) || 0;
         const step = 0.01; // Default step for currency amounts
         const newValue = currentValue + (delta * step);
@@ -103,10 +103,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({
 
     const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
         if (type !== 'number' || !isEditing) return;
-        
+
         e.preventDefault();
         e.stopPropagation();
-        
+
         // Determine direction: negative deltaY means scrolling up (increase), positive means down (decrease)
         const delta = e.deltaY < 0 ? 1 : -1;
         handleNumberChange(delta);
@@ -125,8 +125,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                 onDoubleClick={(e) => e.stopPropagation()}
                 onWheel={handleWheel}
                 className={`px-2 py-1 border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${className}`}
-                style={{ 
-                    fontSize: 'inherit', 
+                style={{
+                    fontSize: 'inherit',
                     fontFamily: 'inherit',
                     position: 'absolute',
                     top: 0,
@@ -146,8 +146,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({
         );
     }
 
-    const displayValue = formatDisplay 
-        ? formatDisplay(value ?? '') 
+    const displayValue = formatDisplay
+        ? formatDisplay(value ?? '')
         : (value ?? '-');
 
     return (
@@ -157,9 +157,9 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                 // Don't stop propagation - let single clicks bubble up to td for cell selection
                 // Only double-click will trigger editing
             }}
-            className={`absolute inset-0 cursor-pointer transition-colors flex items-center justify-start px-3 py-2 group ${className}`}
+            className={`absolute inset-0 cursor-cell transition-colors flex items-center justify-start px-3 py-2 group ${className}`}
             title="Double-click to edit"
-            style={{ 
+            style={{
                 top: 0,
                 left: 0,
                 right: 0,
@@ -173,10 +173,10 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                 if (parentTd) {
                     const computedStyle = window.getComputedStyle(parentTd);
                     const outline = computedStyle.outline;
-                    
+
                     // Check if cell is selected (has gold outline)
                     const isSelected = outline && outline !== 'none' && outline.includes('rgb(218, 165, 32)');
-                    
+
                     // Only apply hover background if cell is not selected
                     // Use a lighter hover effect that won't conflict with selection
                     if (!isSelected) {
@@ -189,6 +189,6 @@ export const EditableCell: React.FC<EditableCellProps> = ({
             }}
         >
             {displayValue}
-        </div>
+        </div >
     );
 };

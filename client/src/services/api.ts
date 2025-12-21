@@ -28,6 +28,10 @@ export interface Expense {
     remarks?: string;
     status?: string;
     user_id?: number;
+    created_by?: string;
+    updated_by?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export const expensesApi = {
@@ -64,6 +68,10 @@ export interface Sale {
     remarks?: string;
     status?: string;
     user_id?: number;
+    created_by?: string;
+    updated_by?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export const salesApi = {
@@ -121,6 +129,10 @@ export interface SupplierPayment {
     remarks?: string;
     status?: string;
     user_id?: number;
+    created_by?: string;
+    updated_by?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export const supplierPaymentsApi = {
@@ -154,6 +166,10 @@ export interface SalaryPayment {
     remarks?: string;
     status?: string;
     user_id?: number;
+    created_by?: string;
+    updated_by?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export const salaryPaymentsApi = {

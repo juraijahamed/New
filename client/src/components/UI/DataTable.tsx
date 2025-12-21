@@ -11,9 +11,13 @@ interface DataTableProps<TData> {
     data: TData[];
     onEdit?: (data: TData) => void;
     compact?: boolean;
+    highlightInfo?: {
+        rowId: string | number;
+        columnKey?: string;
+    } | null;
 }
 
-export function DataTable<TData>({ columns, data, onEdit, compact = false }: DataTableProps<TData>) {
+export function DataTable<TData>({ columns, data, onEdit, compact = false, highlightInfo }: DataTableProps<TData>) {
     const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
     const [copiedCell, setCopiedCell] = useState<{ row: number; col: number } | null>(null);
 
@@ -27,17 +31,17 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false }: Dat
                 if (cellElement) {
                     // Try to get text content, removing extra whitespace
                     let cellValue = cellElement.textContent?.trim() || '';
-                    
+
                     // If the cell contains an EditableCell or other nested component,
                     // try to get the display value from the inner div
                     const displayDiv = cellElement.querySelector('.absolute.inset-0');
                     if (displayDiv) {
                         cellValue = displayDiv.textContent?.trim() || cellValue;
                     }
-                    
+
                     // Remove any extra whitespace and newlines
                     cellValue = cellValue.replace(/\s+/g, ' ').trim();
-                    
+
                     if (cellValue) {
                         try {
                             await navigator.clipboard.writeText(cellValue);
@@ -60,6 +64,50 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false }: Dat
         columns,
         getCoreRowModel: getCoreRowModel(),
     });
+
+    // Handle Highlighting
+    React.useEffect(() => {
+        if (highlightInfo && data.length > 0) {
+            const { rowId, columnKey } = highlightInfo;
+            const rowIndex = data.findIndex((item: any) => String(item.id) === String(rowId));
+
+            if (rowIndex !== -1) {
+                // Find column index
+                let colIndex = 0;
+                if (columnKey) {
+                    colIndex = columns.findIndex((col: any) => col.accessorKey === columnKey);
+                    if (colIndex === -1) colIndex = 0;
+                }
+
+                // Wait for the table to render
+                setTimeout(() => {
+                    // Scroll target cell into view
+                    const targetCellIdentifier = `[data-cell-id="${rowIndex}-${colIndex}"]`;
+                    const targetCellElement = document.querySelector(targetCellIdentifier) as HTMLElement;
+
+                    if (targetCellElement) {
+                        targetCellElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                    }
+
+                    // Highlight entire column using attribute selector suffix
+                    const columnCells = document.querySelectorAll(`[data-cell-id$="-${colIndex}"]`);
+                    columnCells.forEach((cell) => {
+                        cell.classList.add('animate-cue-shining');
+                    });
+
+                    // Set as selected cell for focus
+                    setSelectedCell({ row: rowIndex, col: colIndex });
+
+                    // Remove effect after animation completes (0.8s * 3 = 2.4s)
+                    setTimeout(() => {
+                        columnCells.forEach((cell) => {
+                            cell.classList.remove('animate-cue-shining');
+                        });
+                    }, 2500);
+                }, 300);
+            }
+        }
+    }, [highlightInfo, data, columns]);
 
     const handleCellClick = (rowIndex: number, colIndex: number) => {
         if (selectedCell?.row === rowIndex && selectedCell?.col === colIndex) {
@@ -129,22 +177,22 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false }: Dat
                                             data-cell-id={`${rowIndex}-${colIndex}`}
                                             onClick={(e) => {
                                                 const target = e.target as HTMLElement;
-                                                
+
                                                 // Don't select if clicking on buttons or interactive elements
                                                 if (target.tagName === 'BUTTON' || target.closest('button')) {
                                                     return;
                                                 }
-                                                
+
                                                 // Don't select if clicking on input elements
                                                 if (target.tagName === 'INPUT' || target.closest('input')) {
                                                     return;
                                                 }
-                                                
+
                                                 // Don't select if clicking on select elements
                                                 if (target.tagName === 'SELECT' || target.closest('select')) {
                                                     return;
                                                 }
-                                                
+
                                                 // Handle cell selection
                                                 handleCellClick(rowIndex, colIndex);
                                             }}

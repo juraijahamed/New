@@ -3,8 +3,18 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const http = require('http');
+const { Server } = require('socket.io');
 const { pool, initSchema } = require('./db');
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*', // In production, specify exact origins
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
+  }
+});
 const port = 3001;
 
 // Create uploads directory if it doesn't exist
@@ -24,7 +34,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
@@ -80,550 +90,771 @@ async function start() {
     }
   });
 
-// ============ EXPENSES ============
-app.get('/api/expenses', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM expenses ORDER BY date DESC');
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Get expenses error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  // ============ EXPENSES ============
+  app.get('/api/expenses', async (req, res) => {
+    try {
+      const result = await pool.query(`
+      SELECT 
+        e.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM expenses e
+      LEFT JOIN users u1 ON e.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON e.updated_by_user_id = u2.id
+      ORDER BY COALESCE(e.updated_at, e.created_at) DESC, e.date DESC
+    `);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Get expenses error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
-app.post('/api/expenses', async (req, res) => {
-  const { description, amount, category, date, receipt_url, remarks, status, user_id } = req.body;
-  try {
-    const finalRemarks = (remarks && remarks.trim()) || null;
-    const finalStatus = status || '';
-    const inserted = await pool.query(
-      `INSERT INTO expenses (description, amount, category, date, receipt_url, remarks, status, user_id)
+  app.post('/api/expenses', async (req, res) => {
+    const { description, amount, category, date, receipt_url, remarks, status, user_id } = req.body;
+    try {
+      const finalRemarks = (remarks && remarks.trim()) || null;
+      const finalStatus = status || '';
+      const inserted = await pool.query(
+        `INSERT INTO expenses (description, amount, category, date, receipt_url, remarks, status, user_id, created_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+        [description, amount, category, date, receipt_url || null, finalRemarks, finalStatus, user_id || null, user_id || null]
+      );
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        e.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM expenses e
+      LEFT JOIN users u1 ON e.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON e.updated_by_user_id = u2.id
+      WHERE e.id = $1
+    `, [inserted.rows[0].id]);
+      const newExpense = withNames.rows[0];
+      // Broadcast to all connected clients
+      io.emit('expense:created', newExpense);
+      res.json(newExpense);
+    } catch (error) {
+      console.error('Add expense error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put('/api/expenses/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+    const { user_id, ...updateFields } = updates;
+    const validFields = ['description', 'amount', 'category', 'date', 'receipt_url', 'remarks', 'status'];
+
+    try {
+      const fieldsToUpdate = Object.keys(updateFields)
+        .filter(key => validFields.includes(key) && updateFields[key] !== undefined);
+
+      if (fieldsToUpdate.length === 0 && !user_id) {
+        return res.json({ id: Number(id), ...updates });
+      }
+
+      let setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
+      const values = fieldsToUpdate.map(field => {
+        if (field === 'remarks') return (updateFields[field] && updateFields[field].trim()) || null;
+        if (field === 'receipt_url') return updateFields[field] || null;
+        return updateFields[field];
+      });
+
+      // Add updated_by_user_id and updated_at if user_id is provided or if any field is being updated
+      if (user_id) {
+        if (setClause) setClause += ', ';
+        setClause += `updated_by_user_id = $${values.length + 1}`;
+        values.push(user_id);
+      }
+      // Always update updated_at when any field is updated
+      if (setClause) setClause += ', ';
+      setClause += `updated_at = NOW()`;
+
+      values.push(id);
+      const updated = await pool.query(
+        `UPDATE expenses SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+        values
+      );
+
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        e.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM expenses e
+      LEFT JOIN users u1 ON e.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON e.updated_by_user_id = u2.id
+      WHERE e.id = $1
+    `, [id]);
+      const updatedExpense = withNames.rows[0] || updated.rows[0] || { id: Number(id), ...updates };
+      // Broadcast to all connected clients
+      io.emit('expense:updated', updatedExpense);
+      res.json(updatedExpense);
+    } catch (error) {
+      console.error('Update expense error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete('/api/expenses/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await pool.query('DELETE FROM expenses WHERE id = $1', [id]);
+      // Broadcast to all connected clients
+      io.emit('expense:deleted', { id: Number(id) });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete expense error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============ SALES ============
+  app.get('/api/sales', async (req, res) => {
+    try {
+      const result = await pool.query(`
+      SELECT 
+        s.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM sales s
+      LEFT JOIN users u1 ON s.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON s.updated_by_user_id = u2.id
+      ORDER BY COALESCE(s.updated_at, s.created_at) DESC, s.date DESC
+    `);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Get sales error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/sales', async (req, res) => {
+    const { date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id } = req.body;
+    try {
+      const calculatedProfit = profit !== undefined ? profit : (sales_rate || 0) - (net_rate || 0);
+      const inserted = await pool.query(
+        `INSERT INTO sales (date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, created_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       RETURNING *`,
+        [
+          date,
+          agency,
+          supplier,
+          national,
+          passport_number || null,
+          service,
+          net_rate,
+          sales_rate,
+          calculatedProfit,
+          documents || null,
+          (remarks && remarks.trim()) || null,
+          status || '',
+          user_id || null,
+          user_id || null,
+        ]
+      );
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        s.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM sales s
+      LEFT JOIN users u1 ON s.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON s.updated_by_user_id = u2.id
+      WHERE s.id = $1
+    `, [inserted.rows[0].id]);
+      const newSale = withNames.rows[0];
+      // Broadcast to all connected clients
+      io.emit('sale:created', newSale);
+      res.json(newSale);
+    } catch (error) {
+      console.error('Add sale error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put('/api/sales/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+    const { user_id, ...updateFields } = updates;
+    const validFields = ['date', 'agency', 'supplier', 'national', 'passport_number', 'service', 'net_rate', 'sales_rate', 'profit', 'documents', 'remarks', 'status'];
+
+    try {
+      // specific calculations if rates are updated
+      if (updateFields.sales_rate !== undefined || updateFields.net_rate !== undefined) {
+        // This logic is tricky with partial updates. Ideally we fetch, calc, then update.
+        // For now, let's assume if profit is passed, we use it, otherwise we calculate ONLY IF both rates are passed or we fetch first.
+        // To stay safe and simple for this "status" update fix:
+        // If profit is NOT in updates, and we have rate updates, we might have inconsistent profit if we don't have both rates.
+        // However, the current frontend sends full object for edits, and only {status} for status change.
+        // If {status} only, we skip this calculation.
+      }
+
+      // Recalculate profit if needed and not provided
+      if (updateFields.profit === undefined && (updateFields.sales_rate !== undefined && updateFields.net_rate !== undefined)) {
+        updateFields.profit = (updateFields.sales_rate || 0) - (updateFields.net_rate || 0);
+      }
+
+      const fieldsToUpdate = Object.keys(updateFields)
+        .filter(key => validFields.includes(key) && updateFields[key] !== undefined);
+
+      if (fieldsToUpdate.length === 0 && !user_id) {
+        return res.json({ id: Number(id), ...updates });
+      }
+
+      let setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
+      const values = fieldsToUpdate.map(field => {
+        if (field === 'remarks') return (updateFields[field] && updateFields[field].trim()) || null;
+        if (field === 'documents') return updateFields[field] || null;
+        if (field === 'passport_number') return updateFields[field] || null;
+        return updateFields[field];
+      });
+
+      // Add updated_by_user_id and updated_at if user_id is provided or if any field is being updated
+      if (user_id) {
+        if (setClause) setClause += ', ';
+        setClause += `updated_by_user_id = $${values.length + 1}`;
+        values.push(user_id);
+      }
+      // Always update updated_at when any field is updated
+      if (setClause) setClause += ', ';
+      setClause += `updated_at = NOW()`;
+
+      values.push(id);
+
+      const updated = await pool.query(
+        `UPDATE sales SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+        values
+      );
+
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        s.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM sales s
+      LEFT JOIN users u1 ON s.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON s.updated_by_user_id = u2.id
+      WHERE s.id = $1
+    `, [id]);
+      const updatedSale = withNames.rows[0] || updated.rows[0] || { id: Number(id), ...updates };
+      // Broadcast to all connected clients
+      io.emit('sale:updated', updatedSale);
+      res.json(updatedSale);
+    } catch (error) {
+      console.error('Update sale error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete('/api/sales/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await pool.query('DELETE FROM sales WHERE id = $1', [id]);
+      // Broadcast to all connected clients
+      io.emit('sale:deleted', { id: Number(id) });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete sale error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============ STAFF ============
+  app.get('/api/staff', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT * FROM staff ORDER BY name');
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Get staff error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/staff', async (req, res) => {
+    const { name, position, salary, phone } = req.body;
+    try {
+      const inserted = await pool.query(
+        `INSERT INTO staff (name, position, salary, phone) VALUES ($1,$2,$3,$4) RETURNING *`,
+        [name, position || null, salary || 0, phone || null]
+      );
+      res.json(inserted.rows[0]);
+    } catch (error) {
+      console.error('Add staff error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put('/api/staff/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, position, salary, phone } = req.body;
+    try {
+      const updated = await pool.query(
+        `UPDATE staff SET name = $1, position = $2, salary = $3, phone = $4 WHERE id = $5 RETURNING *`,
+        [name, position || null, salary || 0, phone || null, id]
+      );
+      res.json(updated.rows[0] || { id: Number(id), ...req.body });
+    } catch (error) {
+      console.error('Update staff error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete('/api/staff/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await pool.query('DELETE FROM staff WHERE id = $1', [id]);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete staff error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============ SUPPLIER PAYMENTS ============
+  app.get('/api/supplier-payments', async (req, res) => {
+    try {
+      const result = await pool.query(`
+      SELECT 
+        sp.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM supplier_payments sp
+      LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+      ORDER BY COALESCE(sp.updated_at, sp.created_at) DESC, sp.date DESC
+    `);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Get supplier payments error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/supplier-payments', async (req, res) => {
+    const { supplier_name, amount, date, receipt_url, remarks, status, user_id } = req.body;
+    try {
+      const inserted = await pool.query(
+        `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
-      [description, amount, category, date, receipt_url || null, finalRemarks, finalStatus, user_id || null]
-    );
-    res.json(inserted.rows[0]);
-  } catch (error) {
-    console.error('Add expense error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/expenses/:id', async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  const validFields = ['description', 'amount', 'category', 'date', 'receipt_url', 'remarks', 'status'];
-
-  try {
-    const fieldsToUpdate = Object.keys(updates)
-      .filter(key => validFields.includes(key) && updates[key] !== undefined);
-
-    if (fieldsToUpdate.length === 0) {
-      return res.json({ id: Number(id), ...updates });
+        [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null]
+      );
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        sp.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM supplier_payments sp
+      LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+      WHERE sp.id = $1
+    `, [inserted.rows[0].id]);
+      const newPayment = withNames.rows[0];
+      // Broadcast to all connected clients
+      io.emit('supplier_payment:created', newPayment);
+      res.json(newPayment);
+    } catch (error) {
+      console.error('Add supplier payment error:', error);
+      res.status(500).json({ error: error.message });
     }
+  });
 
-    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
-    const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
-      if (field === 'receipt_url') return updates[field] || null;
-      return updates[field];
-    });
-    values.push(id);
-    const updated = await pool.query(
-      `UPDATE expenses SET ${setClause} WHERE id = $${values.length} RETURNING *`,
-      values
-    );
-    res.json(updated.rows[0] || { id: Number(id), ...updates });
-  } catch (error) {
-    console.error('Update expense error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  app.put('/api/supplier-payments/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+    const { user_id, ...updateFields } = updates;
+    const validFields = ['supplier_name', 'amount', 'date', 'receipt_url', 'remarks', 'status'];
 
-app.delete('/api/expenses/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM expenses WHERE id = $1', [id]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete expense error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+    try {
+      const fieldsToUpdate = Object.keys(updateFields)
+        .filter(key => validFields.includes(key) && updateFields[key] !== undefined);
 
-// ============ SALES ============
-app.get('/api/sales', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM sales ORDER BY date DESC');
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Get sales error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+      if (fieldsToUpdate.length === 0 && !user_id) {
+        return res.json({ id: Number(id), ...updates });
+      }
 
-app.post('/api/sales', async (req, res) => {
-  const { date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id } = req.body;
-  try {
-    const calculatedProfit = profit !== undefined ? profit : (sales_rate || 0) - (net_rate || 0);
-    const inserted = await pool.query(
-      `INSERT INTO sales (date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      let setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
+      const values = fieldsToUpdate.map(field => {
+        if (field === 'remarks') return (updateFields[field] && updateFields[field].trim()) || null;
+        if (field === 'receipt_url') return updateFields[field] || null;
+        return updateFields[field];
+      });
+
+      // Add updated_by_user_id and updated_at if user_id is provided or if any field is being updated
+      if (user_id) {
+        if (setClause) setClause += ', ';
+        setClause += `updated_by_user_id = $${values.length + 1}`;
+        values.push(user_id);
+      }
+      // Always update updated_at when any field is updated
+      if (setClause) setClause += ', ';
+      setClause += `updated_at = NOW()`;
+
+      values.push(id);
+
+      const updated = await pool.query(
+        `UPDATE supplier_payments SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+        values
+      );
+
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        sp.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM supplier_payments sp
+      LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+      WHERE sp.id = $1
+    `, [id]);
+      const updatedPayment = withNames.rows[0] || updated.rows[0] || { id: Number(id), ...updates };
+      // Broadcast to all connected clients
+      io.emit('supplier_payment:updated', updatedPayment);
+      res.json(updatedPayment);
+    } catch (error) {
+      console.error('Update supplier payment error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete('/api/supplier-payments/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await pool.query('DELETE FROM supplier_payments WHERE id = $1', [id]);
+      // Broadcast to all connected clients
+      io.emit('supplier_payment:deleted', { id: Number(id) });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete supplier payment error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============ SALARY PAYMENTS ============
+  app.get('/api/salary-payments', async (req, res) => {
+    try {
+      const result = await pool.query(`
+      SELECT 
+        sp.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM salary_payments sp
+      LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+      ORDER BY COALESCE(sp.updated_at, sp.created_at) DESC, sp.date DESC
+    `);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Get salary payments error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/salary-payments', async (req, res) => {
+    const { staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id } = req.body;
+    try {
+      const inserted = await pool.query(
+        `INSERT INTO salary_payments (staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id, created_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
-      [
-        date,
-        agency,
-        supplier,
-        national,
-        passport_number || null,
-        service,
-        net_rate,
-        sales_rate,
-        calculatedProfit,
-        documents || null,
-        (remarks && remarks.trim()) || null,
-        status || '',
-        user_id || null,
-      ]
-    );
-    res.json(inserted.rows[0]);
-  } catch (error) {
-    console.error('Add sale error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/sales/:id', async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  const validFields = ['date', 'agency', 'supplier', 'national', 'passport_number', 'service', 'net_rate', 'sales_rate', 'profit', 'documents', 'remarks', 'status'];
-
-  try {
-    // specific calculations if rates are updated
-    if (updates.sales_rate !== undefined || updates.net_rate !== undefined) {
-      // This logic is tricky with partial updates. Ideally we fetch, calc, then update.
-      // For now, let's assume if profit is passed, we use it, otherwise we calculate ONLY IF both rates are passed or we fetch first.
-      // To stay safe and simple for this "status" update fix:
-      // If profit is NOT in updates, and we have rate updates, we might have inconsistent profit if we don't have both rates.
-      // However, the current frontend sends full object for edits, and only {status} for status change.
-      // If {status} only, we skip this calculation.
+        [
+          staff_id,
+          staff_name,
+          amount,
+          advance || 0,
+          paid_month,
+          date,
+          receipt_url || null,
+          (remarks && remarks.trim()) || null,
+          status || '',
+          user_id || null,
+          user_id || null,
+        ]
+      );
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        sp.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM salary_payments sp
+      LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+      WHERE sp.id = $1
+    `, [inserted.rows[0].id]);
+      const newPayment = withNames.rows[0];
+      // Broadcast to all connected clients
+      io.emit('salary_payment:created', newPayment);
+      res.json(newPayment);
+    } catch (error) {
+      console.error('Add salary payment error:', error);
+      res.status(500).json({ error: error.message });
     }
+  });
 
-    // Recalculate profit if needed and not provided
-    if (updates.profit === undefined && (updates.sales_rate !== undefined && updates.net_rate !== undefined)) {
-      updates.profit = (updates.sales_rate || 0) - (updates.net_rate || 0);
+  app.put('/api/salary-payments/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+    const { user_id, ...updateFields } = updates;
+    const validFields = ['staff_id', 'staff_name', 'amount', 'advance', 'paid_month', 'date', 'receipt_url', 'remarks', 'status'];
+
+    try {
+      const fieldsToUpdate = Object.keys(updateFields)
+        .filter(key => validFields.includes(key) && updateFields[key] !== undefined);
+
+      if (fieldsToUpdate.length === 0 && !user_id) {
+        return res.json({ id: Number(id), ...updates });
+      }
+
+      let setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
+      const values = fieldsToUpdate.map(field => {
+        if (field === 'remarks') return (updateFields[field] && updateFields[field].trim()) || null;
+        if (field === 'receipt_url') return updateFields[field] || null;
+        return updateFields[field];
+      });
+
+      // Add updated_by_user_id and updated_at if user_id is provided or if any field is being updated
+      if (user_id) {
+        if (setClause) setClause += ', ';
+        setClause += `updated_by_user_id = $${values.length + 1}`;
+        values.push(user_id);
+      }
+      // Always update updated_at when any field is updated
+      if (setClause) setClause += ', ';
+      setClause += `updated_at = NOW()`;
+
+      values.push(id);
+
+      const updated = await pool.query(
+        `UPDATE salary_payments SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+        values
+      );
+
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT 
+        sp.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM salary_payments sp
+      LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+      WHERE sp.id = $1
+    `, [id]);
+      const updatedPayment = withNames.rows[0] || updated.rows[0] || { id: Number(id), ...updates };
+      // Broadcast to all connected clients
+      io.emit('salary_payment:updated', updatedPayment);
+      res.json(updatedPayment);
+    } catch (error) {
+      console.error('Update salary payment error:', error);
+      res.status(500).json({ error: error.message });
     }
+  });
 
-    const fieldsToUpdate = Object.keys(updates)
-      .filter(key => validFields.includes(key) && updates[key] !== undefined);
-
-    if (fieldsToUpdate.length === 0) {
-      return res.json({ id: Number(id), ...updates });
+  app.delete('/api/salary-payments/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await pool.query('DELETE FROM salary_payments WHERE id = $1', [id]);
+      // Broadcast to all connected clients
+      io.emit('salary_payment:deleted', { id: Number(id) });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete salary payment error:', error);
+      res.status(500).json({ error: error.message });
     }
+  });
 
-    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
-    const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
-      if (field === 'documents') return updates[field] || null;
-      if (field === 'passport_number') return updates[field] || null;
-      return updates[field];
-    });
-    values.push(id);
-
-    const updated = await pool.query(
-      `UPDATE sales SET ${setClause} WHERE id = $${values.length} RETURNING *`,
-      values
-    );
-    res.json(updated.rows[0] || { id: Number(id), ...updates });
-  } catch (error) {
-    console.error('Update sale error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/sales/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM sales WHERE id = $1', [id]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete sale error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============ STAFF ============
-app.get('/api/staff', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM staff ORDER BY name');
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Get staff error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/staff', async (req, res) => {
-  const { name, position, salary, phone } = req.body;
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO staff (name, position, salary, phone) VALUES ($1,$2,$3,$4) RETURNING *`,
-      [name, position || null, salary || 0, phone || null]
-    );
-    res.json(inserted.rows[0]);
-  } catch (error) {
-    console.error('Add staff error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/staff/:id', async (req, res) => {
-  const { id } = req.params;
-  const { name, position, salary, phone } = req.body;
-  try {
-    const updated = await pool.query(
-      `UPDATE staff SET name = $1, position = $2, salary = $3, phone = $4 WHERE id = $5 RETURNING *`,
-      [name, position || null, salary || 0, phone || null, id]
-    );
-    res.json(updated.rows[0] || { id: Number(id), ...req.body });
-  } catch (error) {
-    console.error('Update staff error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/staff/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM staff WHERE id = $1', [id]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete staff error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============ SUPPLIER PAYMENTS ============
-app.get('/api/supplier-payments', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM supplier_payments ORDER BY date DESC');
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Get supplier payments error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/supplier-payments', async (req, res) => {
-  const { supplier_name, amount, date, receipt_url, remarks, status, user_id } = req.body;
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
-       RETURNING *`,
-      [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null]
-    );
-    res.json(inserted.rows[0]);
-  } catch (error) {
-    console.error('Add supplier payment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/supplier-payments/:id', async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  const validFields = ['supplier_name', 'amount', 'date', 'receipt_url', 'remarks', 'status'];
-
-  try {
-    const fieldsToUpdate = Object.keys(updates)
-      .filter(key => validFields.includes(key) && updates[key] !== undefined);
-
-    if (fieldsToUpdate.length === 0) {
-      return res.json({ id: Number(id), ...updates });
+  // ============ FILE UPLOAD ============
+  app.post('/api/upload', upload.single('file'), (req, res) => {
+    try {
+      console.log('Upload endpoint hit');
+      console.log('Request file:', req.file);
+      if (!req.file) {
+        console.log('No file in request');
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      const response = {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        path: `/uploads/${req.file.filename}`
+      };
+      console.log('Upload successful:', response);
+      res.json(response);
+    } catch (error) {
+      console.error('File upload error:', error);
+      res.status(500).json({ error: error.message });
     }
+  });
 
-    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
-    const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
-      if (field === 'receipt_url') return updates[field] || null;
-      return updates[field];
-    });
-    values.push(id);
-
-    const updated = await pool.query(
-      `UPDATE supplier_payments SET ${setClause} WHERE id = $${values.length} RETURNING *`,
-      values
-    );
-    res.json(updated.rows[0] || { id: Number(id), ...updates });
-  } catch (error) {
-    console.error('Update supplier payment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/supplier-payments/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM supplier_payments WHERE id = $1', [id]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete supplier payment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============ SALARY PAYMENTS ============
-app.get('/api/salary-payments', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM salary_payments ORDER BY date DESC');
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Get salary payments error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/salary-payments', async (req, res) => {
-  const { staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id } = req.body;
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO salary_payments (staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       RETURNING *`,
-      [
-        staff_id,
-        staff_name,
-        amount,
-        advance || 0,
-        paid_month,
-        date,
-        receipt_url || null,
-        (remarks && remarks.trim()) || null,
-        status || '',
-        user_id || null,
-      ]
-    );
-    res.json(inserted.rows[0]);
-  } catch (error) {
-    console.error('Add salary payment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/salary-payments/:id', async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  const validFields = ['staff_id', 'staff_name', 'amount', 'advance', 'paid_month', 'date', 'receipt_url', 'remarks', 'status'];
-
-  try {
-    const fieldsToUpdate = Object.keys(updates)
-      .filter(key => validFields.includes(key) && updates[key] !== undefined);
-
-    if (fieldsToUpdate.length === 0) {
-      return res.json({ id: Number(id), ...updates });
+  // Multiple file upload endpoint
+  app.post('/api/upload-multiple', upload.array('files', 10), (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+      const files = req.files.map(file => ({
+        filename: file.filename,
+        originalName: file.originalname,
+        path: `/uploads/${file.filename}`
+      }));
+      res.json({ files });
+    } catch (error) {
+      console.error('Multiple file upload error:', error);
+      res.status(500).json({ error: error.message });
     }
+  });
 
-    const setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
-    const values = fieldsToUpdate.map(field => {
-      if (field === 'remarks') return (updates[field] && updates[field].trim()) || null;
-      if (field === 'receipt_url') return updates[field] || null;
-      return updates[field];
-    });
-    values.push(id);
+  // ============ DASHBOARD STATS ============
+  app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+      const salesData = (await pool.query('SELECT SUM(sales_rate) as total, SUM(profit) as "totalProfit", COUNT(*) as count FROM sales')).rows[0];
+      const expensesData = (await pool.query('SELECT SUM(amount) as total, COUNT(*) as count FROM expenses')).rows[0];
+      const salaryData = (await pool.query('SELECT SUM(amount) as total, COUNT(*) as count FROM salary_payments')).rows[0];
 
-    const updated = await pool.query(
-      `UPDATE salary_payments SET ${setClause} WHERE id = $${values.length} RETURNING *`,
-      values
-    );
-    res.json(updated.rows[0] || { id: Number(id), ...updates });
-  } catch (error) {
-    console.error('Update salary payment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+      const totalSales = salesData?.total || 0;
+      const totalProfit = salesData?.totalProfit || 0;
+      const salesCount = salesData?.count || 0;
+      const totalExpenses = (Number(expensesData?.total) || 0) + (Number(salaryData?.total) || 0);
+      const expensesCount = (Number(expensesData?.count) || 0) + (Number(salaryData?.count) || 0);
+      const netProfit = totalProfit - totalExpenses;
 
-app.delete('/api/salary-payments/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM salary_payments WHERE id = $1', [id]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete salary payment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============ FILE UPLOAD ============
-app.post('/api/upload', upload.single('file'), (req, res) => {
-  try {
-    console.log('Upload endpoint hit');
-    console.log('Request file:', req.file);
-    if (!req.file) {
-      console.log('No file in request');
-      return res.status(400).json({ error: 'No file uploaded' });
+      res.json({
+        totalSales,
+        totalExpenses,
+        totalProfit,
+        netProfit,
+        salesCount,
+        expensesCount
+      });
+    } catch (error) {
+      console.error('Get dashboard stats error:', error);
+      res.status(500).json({ error: error.message });
     }
-    const response = { 
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      path: `/uploads/${req.file.filename}`
-    };
-    console.log('Upload successful:', response);
-    res.json(response);
-  } catch (error) {
-    console.error('File upload error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  });
 
-// Multiple file upload endpoint
-app.post('/api/upload-multiple', upload.array('files', 10), (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'No files uploaded' });
+  // ============ DROPDOWN OPTIONS ============
+  app.get('/api/dropdown-options', async (req, res) => {
+    try {
+      const { type, table_type } = req.query;
+      let query = 'SELECT * FROM dropdown_options WHERE 1=1';
+      let params = [];
+      let paramIndex = 1;
+
+      if (type) {
+        query += ` AND type = $${paramIndex}`;
+        params.push(type);
+        paramIndex++;
+      }
+
+      if (table_type) {
+        // When table_type is specified, STRICTLY return ONLY options for that specific table type
+        // This ensures sales options don't appear in expenses, etc.
+        query += ` AND table_type = $${paramIndex}`;
+        params.push(table_type);
+        paramIndex++;
+      } else if (type === 'status') {
+        // For status type without table_type specified, return options without table_type (legacy/fallback)
+        // This is for backward compatibility only
+        query += ` AND table_type IS NULL`;
+      }
+
+      query += ' ORDER BY type, table_type, display_order, value';
+
+      const result = await pool.query(query, params);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Get dropdown options error:', error);
+      res.status(500).json({ error: error.message });
     }
-    const files = req.files.map(file => ({
-      filename: file.filename,
-      originalName: file.originalname,
-      path: `/uploads/${file.filename}`
-    }));
-    res.json({ files });
-  } catch (error) {
-    console.error('Multiple file upload error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  });
 
-// ============ DASHBOARD STATS ============
-app.get('/api/dashboard/stats', async (req, res) => {
-  try {
-    const salesData = (await pool.query('SELECT SUM(sales_rate) as total, SUM(profit) as "totalProfit", COUNT(*) as count FROM sales')).rows[0];
-    const expensesData = (await pool.query('SELECT SUM(amount) as total, COUNT(*) as count FROM expenses')).rows[0];
-
-    const totalSales = salesData?.total || 0;
-    const totalProfit = salesData?.totalProfit || 0;
-    const salesCount = salesData?.count || 0;
-    const totalExpenses = expensesData?.total || 0;
-    const expensesCount = expensesData?.count || 0;
-    const netProfit = totalProfit - totalExpenses;
-
-    res.json({
-      totalSales,
-      totalExpenses,
-      totalProfit,
-      netProfit,
-      salesCount,
-      expensesCount
-    });
-  } catch (error) {
-    console.error('Get dashboard stats error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============ DROPDOWN OPTIONS ============
-app.get('/api/dropdown-options', async (req, res) => {
-  try {
-    const { type, table_type } = req.query;
-    let query = 'SELECT * FROM dropdown_options WHERE 1=1';
-    let params = [];
-    let paramIndex = 1;
-    
-    if (type) {
-      query += ` AND type = $${paramIndex}`;
-      params.push(type);
-      paramIndex++;
+  app.post('/api/dropdown-options', async (req, res) => {
+    const { type, value, display_order, color, table_type } = req.body;
+    if (!type || !value) {
+      return res.status(400).json({ error: 'Type and value are required' });
     }
-    
-    if (table_type) {
-      // When table_type is specified, STRICTLY return ONLY options for that specific table type
-      // This ensures sales options don't appear in expenses, etc.
-      query += ` AND table_type = $${paramIndex}`;
-      params.push(table_type);
-      paramIndex++;
-    } else if (type === 'status') {
-      // For status type without table_type specified, return options without table_type (legacy/fallback)
-      // This is for backward compatibility only
-      query += ` AND table_type IS NULL`;
+    // For status type, table_type is required
+    if (type === 'status' && !table_type) {
+      return res.status(400).json({ error: 'table_type is required for status options' });
     }
-    
-    query += ' ORDER BY type, table_type, display_order, value';
-    
-    const result = await pool.query(query, params);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Get dropdown options error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/dropdown-options', async (req, res) => {
-  const { type, value, display_order, color, table_type } = req.body;
-  if (!type || !value) {
-    return res.status(400).json({ error: 'Type and value are required' });
-  }
-  // For status type, table_type is required
-  if (type === 'status' && !table_type) {
-    return res.status(400).json({ error: 'table_type is required for status options' });
-  }
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO dropdown_options (type, value, display_order, color, table_type)
+    try {
+      const inserted = await pool.query(
+        `INSERT INTO dropdown_options (type, value, display_order, color, table_type)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (type, value, table_type) DO UPDATE SET display_order = $3, color = COALESCE(NULLIF($4, ''), dropdown_options.color)
        RETURNING *`,
-      [type, value, display_order || 0, color || null, table_type || null]
-    );
-    res.json(inserted.rows[0]);
-  } catch (error) {
-    console.error('Add dropdown option error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/dropdown-options/:id', async (req, res) => {
-  const { id } = req.params;
-  const { value, display_order, color, table_type } = req.body;
-  try {
-    // Get the existing option to preserve table_type if not provided
-    const existing = await pool.query('SELECT type, table_type FROM dropdown_options WHERE id = $1', [id]);
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ error: 'Dropdown option not found' });
+        [type, value, display_order || 0, color || null, table_type || null]
+      );
+      res.json(inserted.rows[0]);
+    } catch (error) {
+      console.error('Add dropdown option error:', error);
+      res.status(500).json({ error: error.message });
     }
-    
-    // Preserve existing table_type if not provided in update, but allow explicit changes
-    const finalTableType = table_type !== undefined ? table_type : existing.rows[0].table_type;
-    
-    // For status type, ensure table_type is set
-    if (existing.rows[0].type === 'status' && !finalTableType) {
-      return res.status(400).json({ error: 'table_type is required for status options' });
+  });
+
+  app.put('/api/dropdown-options/:id', async (req, res) => {
+    const { id } = req.params;
+    const { value, display_order, color, table_type } = req.body;
+    try {
+      // Get the existing option to preserve table_type if not provided
+      const existing = await pool.query('SELECT type, table_type FROM dropdown_options WHERE id = $1', [id]);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ error: 'Dropdown option not found' });
+      }
+
+      // Preserve existing table_type if not provided in update, but allow explicit changes
+      const finalTableType = table_type !== undefined ? table_type : existing.rows[0].table_type;
+
+      // For status type, ensure table_type is set
+      if (existing.rows[0].type === 'status' && !finalTableType) {
+        return res.status(400).json({ error: 'table_type is required for status options' });
+      }
+
+      const updated = await pool.query(
+        `UPDATE dropdown_options SET value = $1, display_order = $2, color = COALESCE(NULLIF($3, ''), dropdown_options.color), table_type = $4 WHERE id = $5 RETURNING *`,
+        [value, display_order || 0, color || null, finalTableType, id]
+      );
+      res.json(updated.rows[0]);
+    } catch (error) {
+      console.error('Update dropdown option error:', error);
+      res.status(500).json({ error: error.message });
     }
-    
-    const updated = await pool.query(
-      `UPDATE dropdown_options SET value = $1, display_order = $2, color = COALESCE(NULLIF($3, ''), dropdown_options.color), table_type = $4 WHERE id = $5 RETURNING *`,
-      [value, display_order || 0, color || null, finalTableType, id]
-    );
-    res.json(updated.rows[0]);
-  } catch (error) {
-    console.error('Update dropdown option error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  });
 
-app.delete('/api/dropdown-options/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM dropdown_options WHERE id = $1', [id]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Delete dropdown option error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  app.delete('/api/dropdown-options/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await pool.query('DELETE FROM dropdown_options WHERE id = $1', [id]);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete dropdown option error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
-  // Start Server
-  app.listen(port, () => {
+  // Socket.IO Connection Handler
+  io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
+    });
+  });
+
+  // Start Server with Socket.IO
+  server.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
+    console.log(`Socket.IO server ready`);
     console.log(`Upload endpoint available at http://localhost:${port}/api/upload`);
     console.log(`Uploads directory: ${uploadsDir}`);
   });

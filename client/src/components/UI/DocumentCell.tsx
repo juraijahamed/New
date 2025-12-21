@@ -19,24 +19,16 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
 }) => {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const files = value ? value.split(',').filter(f => f.trim()) : [];
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
+        const inputFiles = e.target.files;
+        if (!inputFiles || inputFiles.length === 0) return;
 
         setIsUploading(true);
         try {
-            if (multiple) {
-                const fileArray = Array.from(files);
-                const response = await fileUploadApi.uploadMultiple(fileArray);
-                const paths = response.files.map(f => f.path);
-                const existingDocs = value ? value.split(',').filter(f => f.trim()) : [];
-                const newDocs = [...existingDocs, ...paths].join(',');
-                await onUpdate(newDocs);
-            } else {
-                const response = await fileUploadApi.uploadSingle(files[0]);
-                await onUpdate(response.path);
-            }
+            const response = await fileUploadApi.uploadSingle(inputFiles[0]);
+            await onUpdate(response.path);
         } catch (error) {
             console.error('Error uploading file:', error);
             alert('Failed to upload file. Please try again.');
@@ -48,18 +40,15 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
         }
     };
 
-    const handleViewClick = (e: React.MouseEvent) => {
+    const handleViewFile = (fileUrl: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!value || !onPreview) return;
-        
-        const files = value.split(',').filter(f => f.trim());
-        const firstFile = files[0]?.trim();
-        if (firstFile) {
-            onPreview(
-                `${apiBaseUrl}${firstFile}`,
-                files.length > 1 ? `Documents (${files.length} files)` : 'Document'
-            );
-        }
+        if (!onPreview) return;
+        onPreview(`${apiBaseUrl}${fileUrl}`, 'Document');
+    };
+
+    const handleDeleteFile = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        await onUpdate('');
     };
 
     const handleUploadClick = (e: React.MouseEvent) => {
@@ -75,63 +64,54 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
                     type="file"
                     className="hidden"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    multiple={multiple}
                     onChange={handleFileChange}
                 />
                 <button
                     onClick={handleUploadClick}
                     disabled={isUploading}
-                    className="p-1.5 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors group flex items-center gap-1 disabled:opacity-50"
+                    className="p-1 px-2.5 bg-gray-50 text-gray-600 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors group flex items-center gap-1.5 disabled:opacity-50 cursor-cell"
                     title="Upload document"
                 >
                     {isUploading ? (
-                        <Loader2 size={16} className="animate-spin" />
+                        <Loader2 size={14} className="animate-spin text-blue-500" />
                     ) : (
-                        <Upload size={16} />
+                        <Upload size={14} className="group-hover:translate-y-[-1px] transition-transform" />
                     )}
-                    <span className="text-xs font-medium">
-                        {isUploading ? 'Uploading...' : 'Upload'}
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">
+                        {isUploading ? '...' : 'Docs'}
                     </span>
                 </button>
             </div>
         );
     }
 
-    const files = value.split(',').filter(f => f.trim());
-    const fileCount = files.length;
-
     return (
-        <div className="flex items-center gap-2">
-            <button
-                onClick={handleViewClick}
-                className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors group flex items-center gap-1"
-                title={fileCount > 1 ? `View ${fileCount} documents` : "View Document"}
-            >
-                <FileText size={16} />
-                <span className="text-xs font-medium">
-                    {fileCount > 1 ? `${fileCount} files` : 'View'}
-                </span>
-            </button>
+        <div className="flex items-center min-w-[40px]">
+            <div className="relative group/file">
+                <button
+                    onClick={(e) => handleViewFile(value, e)}
+                    className="p-1.5 bg-blue-50 text-blue-600 rounded border border-blue-100 flex items-center justify-center hover:bg-blue-100 transition-all cursor-cell shadow-sm"
+                    title="View document"
+                >
+                    <FileText size={14} />
+                </button>
+                <button
+                    onClick={handleDeleteFile}
+                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover/file:opacity-100 transition-opacity flex items-center justify-center shadow-md z-10 hover:bg-red-600"
+                    style={{ width: '14px', height: '14px', fontSize: '8px' }}
+                    title="Remove document"
+                >
+                    ✕
+                </button>
+            </div>
+
             <input
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
                 accept=".pdf,.jpg,.jpeg,.png"
-                multiple={multiple}
                 onChange={handleFileChange}
             />
-            <button
-                onClick={handleUploadClick}
-                disabled={isUploading}
-                className="p-1.5 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors group flex items-center gap-1 disabled:opacity-50"
-                title="Add more documents"
-            >
-                {isUploading ? (
-                    <Loader2 size={14} className="animate-spin" />
-                ) : (
-                    <Upload size={14} />
-                )}
-            </button>
         </div>
     );
 };

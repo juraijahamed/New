@@ -9,10 +9,15 @@ import { StatusSelect } from '../components/UI/StatusSelect';
 import { EditableCell } from '../components/UI/EditableCell';
 import { DocumentCell } from '../components/UI/DocumentCell';
 import { Toast } from '../components/UI/Toast';
+import { useSearchParams } from 'react-router-dom';
 import type { Expense, SalaryPayment } from '../services/api';
 
 const Expenses = () => {
     const { expenses, salaryPayments, isLoading, updateExpense, updateSalaryPayment } = useData();
+    const [searchParams] = useSearchParams();
+    const highlightId = searchParams.get('highlightId');
+    const highlightKey = searchParams.get('highlightKey');
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedExpense, setSelectedExpense] = useState<Expense | SalaryPayment | null>(null);
     const [previewFile, setPreviewFile] = useState<{ url: string; title: string; expenseId?: number; isSalary?: boolean } | null>(null);
@@ -22,9 +27,18 @@ const Expenses = () => {
 
     const API_BASE_URL = 'http://localhost:3001';
 
-    // Filter out salary expenses from general expenses
-    const generalExpenses = expenses.filter(e => e.category !== 'Salary');
-    // Salary expenses are now in salaryPayments from DataContext
+    // Strict ID Ascending sort for a cleaner "series" view (1, 2, 3...)
+    const sortedExpenses = useMemo(() => {
+        return [...expenses].sort((a, b) => (a.id || 0) - (b.id || 0));
+    }, [expenses]);
+
+    const sortedSalaryPayments = useMemo(() => {
+        return [...salaryPayments].sort((a, b) => (a.id || 0) - (b.id || 0));
+    }, [salaryPayments]);
+
+    // General Expenses are now just all expenses in the table
+    const generalExpenses = sortedExpenses;
+    // Salary expenses are strictly in sortedSalaryPayments from DataContext
 
     const handleEdit = (expense: Expense | SalaryPayment) => {
         setSelectedExpense(expense);
@@ -37,11 +51,8 @@ const Expenses = () => {
                 accessorKey: 'id',
                 header: 'ID',
                 cell: ({ row }) => (
-                    <div 
-                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        onClick={(e) => {
-                            // Allow single clicks to bubble up for cell selection
-                        }}
+                    <div
+                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-cell hover:bg-black/[0.02] transition-colors"
                         onDoubleClick={(e) => {
                             e.stopPropagation();
                             handleEdit(row.original);
@@ -158,11 +169,8 @@ const Expenses = () => {
                 accessorKey: 'id',
                 header: 'ID',
                 cell: ({ row }) => (
-                    <div 
-                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        onClick={(e) => {
-                            // Allow single clicks to bubble up for cell selection
-                        }}
+                    <div
+                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-pointer hover:bg-black/[0.02] transition-colors"
                         onDoubleClick={(e) => {
                             e.stopPropagation();
                             handleEdit(row.original);
@@ -283,142 +291,150 @@ const Expenses = () => {
                 onClose={() => setShowToast(false)}
             />
             <div className="p-2.5 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
-                        <Wallet className="text-amber-600" />
-                        Expenses
-                    </h1>
-                    <p className="text-sm text-gray-500 mt-1">
-                        General: <span className="font-mono text-red-600">AED {totalGeneralExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                        {' | '}
-                        Salaries: <span className="font-mono text-red-600">AED {totalSalaryExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="bg-white rounded-lg px-4 py-2.5 border border-amber-200 shadow-sm">
-                        <p className="text-xs text-gray-500 mb-0.5">Total Expenses</p>
-                        <p className="text-lg font-bold text-red-600 font-mono">
-                            AED {totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <div className="flex justify-between items-center mb-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
+                            <Wallet className="text-amber-600" />
+                            Expenses
+                        </h1>
+                        <p className="text-sm text-gray-500 mt-1">
+                            General: <span className="font-mono text-red-600">AED {totalGeneralExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                            {' | '}
+                            Salaries: <span className="font-mono text-red-600">AED {totalSalaryExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                         </p>
                     </div>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white rounded-lg px-4 py-2.5 border border-amber-200 shadow-sm">
+                            <p className="text-xs text-gray-500 mb-0.5">Total Expenses</p>
+                            <p className="text-lg font-bold text-red-600 font-mono">
+                                AED {totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => { setSelectedExpense(null); setIsModalOpen(true); }}
+                            className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-4 py-2 rounded-[10px] flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all text-sm font-medium"
+                        >
+                            <PlusCircle size={18} />
+                            New Entry
+                        </button>
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex border-b border-gray-200 mb-4">
                     <button
-                        onClick={() => { setSelectedExpense(null); setIsModalOpen(true); }}
-                        className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-4 py-2 rounded-[10px] flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all text-sm font-medium"
+                        onClick={() => setActiveTab('general')}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'general'
+                            ? 'border-amber-600 text-amber-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
                     >
-                        <PlusCircle size={18} />
-                        New Entry
+                        <Receipt size={16} />
+                        General Expenses ({generalExpenses.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('salary')}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'salary'
+                            ? 'border-amber-600 text-amber-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        <Wallet size={16} />
+                        Salary Payments ({salaryPayments.length})
                     </button>
                 </div>
-            </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-gray-200 mb-4">
-                <button
-                    onClick={() => setActiveTab('general')}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'general'
-                        ? 'border-amber-600 text-amber-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                >
-                    <Receipt size={16} />
-                    General Expenses ({generalExpenses.length})
-                </button>
-                <button
-                    onClick={() => setActiveTab('salary')}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'salary'
-                        ? 'border-amber-600 text-amber-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                >
-                    <Wallet size={16} />
-                    Salary Payments ({salaryPayments.length})
-                </button>
-            </div>
-
-            <div className="flex-1 overflow-auto bg-white rounded-[6px] border border-gray-200">
-                {isLoading ? (
-                    <div className="flex items-center justify-center h-64">
-                        <Loader2 className="animate-spin text-amber-600" size={32} />
-                    </div>
-                ) : activeTab === 'general' ? (
-                    generalExpenses.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                            <div className="text-5xl mb-3">📋</div>
-                            <p>No expenses recorded</p>
+                <div className="flex-1 overflow-auto bg-white rounded-[6px] border border-gray-200">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center h-64">
+                            <Loader2 className="animate-spin text-amber-600" size={32} />
                         </div>
+                    ) : activeTab === 'general' ? (
+                        generalExpenses.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                                <div className="text-5xl mb-3">📋</div>
+                                <p>No expenses recorded</p>
+                            </div>
+                        ) : (
+                            <DataTable
+                                columns={expenseColumns}
+                                data={generalExpenses}
+                                highlightInfo={highlightId ? { rowId: highlightId, columnKey: highlightKey || undefined } : null}
+                            />
+                        )
                     ) : (
-                        <DataTable columns={expenseColumns} data={generalExpenses} />
-                    )
-                ) : (
-                    salaryPayments.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                            <div className="text-5xl mb-3">💰</div>
-                            <p>No salary payments recorded</p>
-                        </div>
-                    ) : (
-                        <DataTable columns={salaryColumns} data={salaryPayments} />
-                    )
-                )}
-            </div>
+                        salaryPayments.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                                <div className="text-5xl mb-3">💰</div>
+                                <p>No salary payments recorded</p>
+                            </div>
+                        ) : (
+                            <DataTable
+                                columns={salaryColumns}
+                                data={sortedSalaryPayments}
+                                highlightInfo={highlightId ? { rowId: highlightId, columnKey: highlightKey || undefined } : null}
+                            />
+                        )
+                    )}
+                </div>
 
-            {/* Modals */}
-            <ExpenseModal
-                isOpen={isModalOpen}
-                onClose={() => { setIsModalOpen(false); setSelectedExpense(null); }}
-                expense={selectedExpense}
-            />
+                {/* Modals */}
+                <ExpenseModal
+                    isOpen={isModalOpen}
+                    onClose={() => { setIsModalOpen(false); setSelectedExpense(null); }}
+                    expense={selectedExpense}
+                />
 
-            <FilePreviewModal
-                isOpen={!!previewFile}
-                onClose={() => setPreviewFile(null)}
-                fileUrl={previewFile?.url}
-                title={previewFile?.title}
-                onEdit={() => {
-                    if (previewFile?.expenseId && !previewFile.isSalary) {
-                        const expense = expenses.find(e => e.id === previewFile.expenseId);
-                        if (expense) {
-                            setSelectedExpense(expense);
-                            setIsModalOpen(true);
+                <FilePreviewModal
+                    isOpen={!!previewFile}
+                    onClose={() => setPreviewFile(null)}
+                    fileUrl={previewFile?.url}
+                    title={previewFile?.title}
+                    onEdit={() => {
+                        if (previewFile?.expenseId && !previewFile.isSalary) {
+                            const expense = expenses.find(e => e.id === previewFile.expenseId);
+                            if (expense) {
+                                setSelectedExpense(expense);
+                                setIsModalOpen(true);
+                                setPreviewFile(null);
+                            }
+                        }
+                    }}
+                    onRemove={async () => {
+                        if (previewFile?.expenseId && !previewFile.isSalary) {
+                            await updateExpense(previewFile.expenseId, { receipt_url: '' });
                             setPreviewFile(null);
                         }
-                    }
-                }}
-                onRemove={async () => {
-                    if (previewFile?.expenseId && !previewFile.isSalary) {
-                        await updateExpense(previewFile.expenseId, { receipt_url: '' });
-                        setPreviewFile(null);
-                    }
-                }}
-                onDownload={async () => {
-                    if (previewFile?.url) {
-                        try {
-                            const response = await fetch(previewFile.url);
-                            if (!response.ok) throw new Error('Failed to fetch file');
-                            
-                            const blob = await response.blob();
-                            const url = window.URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            const filename = previewFile.url.split('/').pop() || 'file';
-                            link.download = filename;
-                            link.style.display = 'none';
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            window.URL.revokeObjectURL(url);
-                            
-                            setToastMessage(`File downloaded: ${filename}`);
-                            setShowToast(true);
-                        } catch (error) {
-                            console.error('Download error:', error);
-                            setToastMessage('Failed to download file');
-                            setShowToast(true);
+                    }}
+                    onDownload={async () => {
+                        if (previewFile?.url) {
+                            try {
+                                const response = await fetch(previewFile.url);
+                                if (!response.ok) throw new Error('Failed to fetch file');
+
+                                const blob = await response.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                const filename = previewFile.url.split('/').pop() || 'file';
+                                link.download = filename;
+                                link.style.display = 'none';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                window.URL.revokeObjectURL(url);
+
+                                setToastMessage(`File downloaded: ${filename}`);
+                                setShowToast(true);
+                            } catch (error) {
+                                console.error('Download error:', error);
+                                setToastMessage('Failed to download file');
+                                setShowToast(true);
+                            }
                         }
-                    }
-                }}
-            />
-        </div>
+                    }}
+                />
+            </div>
         </>
     );
 };

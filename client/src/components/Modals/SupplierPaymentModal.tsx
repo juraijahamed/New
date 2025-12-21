@@ -4,6 +4,8 @@ import { useData } from '../../context/DataContext';
 import type { SupplierPayment } from '../../services/api';
 import { fileUploadApi } from '../../services/api';
 import { Upload, X } from 'lucide-react';
+import { useSuggestions } from '../../context/SuggestionContext';
+import AutocompleteInput from '../UI/AutocompleteInput';
 
 interface SupplierPaymentModalProps {
     isOpen: boolean;
@@ -13,6 +15,7 @@ interface SupplierPaymentModalProps {
 
 const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onClose, payment }) => {
     const { addSupplierPayment, updateSupplierPayment } = useData();
+    const suggestions = useSuggestions();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -51,7 +54,7 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
 
         try {
             let receiptUrl = formData.receipt_url;
-            
+
             // Upload file if a new file is selected
             if (selectedFile) {
                 const uploadResponse = await fileUploadApi.uploadSingle(selectedFile);
@@ -86,13 +89,12 @@ const SupplierPaymentModal: React.FC<SupplierPaymentModalProps> = ({ isOpen, onC
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Name</label>
-                    <input
-                        type="text"
-                        required
+                    <AutocompleteInput
                         value={formData.supplier_name}
-                        onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50/50"
+                        onChange={(value) => setFormData({ ...formData, supplier_name: value })}
+                        suggestions={suggestions.suppliers}
                         placeholder="Enter supplier name"
+                        required
                     />
                 </div>
 
