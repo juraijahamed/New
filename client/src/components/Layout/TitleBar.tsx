@@ -74,7 +74,7 @@ const TitleBar = () => {
                 display: "flex",
                 alignItems: "center",
                 position: "fixed",
-            }}
+            } as any}
         >
             {/* Blend with sidebar on the left */}
             <div
@@ -94,14 +94,14 @@ const TitleBar = () => {
                     flex: 1,
                     height: "100%",
                     WebkitAppRegion: "drag",
-                }}
+                } as any}
             />
 
             <div
                 className="flex items-center h-full gap-2"
                 style={{
                     WebkitAppRegion: "no-drag",
-                }}
+                } as any}
             >
                 <div
                     className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg"
@@ -111,7 +111,7 @@ const TitleBar = () => {
                         boxShadow: "0 10px 30px -20px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.04)",
                         backdropFilter: "blur(10px)",
                         WebkitAppRegion: "no-drag",
-                    }}
+                    } as any}
                 >
                     <TitleButton label="Minimize" hoverColor="rgba(218, 165, 32, 0.3)" onClick={() => window.electronAPI?.minimize()}>
                         <Minus size={11} />

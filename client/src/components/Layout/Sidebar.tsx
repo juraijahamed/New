@@ -109,7 +109,7 @@ const Sidebar = () => {
                 whileHover={{ scale: 1.1, boxShadow: '0 0 30px rgba(218, 165, 32, 0.6)' }}
                 transition={{ duration: 0.3 }}
             >
-                <img src="/img/icon.jpeg" alt="Logo" className="w-full h-full object-cover" />
+                <img src="img/icon.jpeg" alt="Logo" className="w-full h-full object-cover" />
             </motion.div>
 
             {/* Separator after logo */}
@@ -120,12 +120,12 @@ const Sidebar = () => {
             {/* Main menu items */}
             <div className="flex-1 flex flex-col gap-2 w-full px-2">
                 {menuItems.map((item, index) => renderMenuItem(item, index))}
-                
+
                 {/* Separator before search */}
                 <div className="w-8 h-px my-2 mx-auto"
                     style={{ background: 'linear-gradient(90deg, transparent, rgba(218, 165, 32, 0.3), transparent)' }}
                 />
-                
+
                 {/* Search icon */}
                 <motion.div
                     className="relative"
@@ -143,7 +143,7 @@ const Sidebar = () => {
                             borderRadius: '8px',
                             fontSize: '13px'
                         }}
-                        whileHover={{ 
+                        whileHover={{
                             backgroundColor: 'rgba(218, 165, 32, 0.1)',
                             borderColor: 'rgba(218, 165, 32, 0.6)'
                         }}
@@ -157,6 +157,8 @@ const Sidebar = () => {
                     </motion.button>
                 </motion.div>
             </div>
+
+
 
             {/* Settings at bottom */}
             <div className="w-full px-2">

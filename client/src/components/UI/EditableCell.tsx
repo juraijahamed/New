@@ -153,7 +153,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
     return (
         <div
             onDoubleClick={handleDoubleClick}
-            onClick={(e) => {
+            onClick={() => {
                 // Don't stop propagation - let single clicks bubble up to td for cell selection
                 // Only double-click will trigger editing
             }}

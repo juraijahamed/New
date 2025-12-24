@@ -1,26 +1,25 @@
 {
-  "name": "client",
+  "name": "hawk-travelmate",
+  "productName": "Hawk Travelmate",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Travel Agency Management System",
   "type": "module",
   "main": "electron/main.cjs",
+  "author": "Juraij Ahamed",
   "scripts": {
     "dev": "concurrently -k \"node ../server/index.js\" \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron electron/main.cjs\"",
-    "electron:build": "vite build && electron-builder",
-    "build": "tsc && vite build",
+    "dev:web": "vite",
+    "build": "tsc -b && vite build",
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:win": "npm run build && electron-builder --win",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aws-amplify/ui-react": "^6.13.2",
     "@tanstack/react-table": "^8.21.3",
-    "aws-amplify": "^6.15.9",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
-    "concurrently": "^9.2.1",
-    "cross-env": "^10.1.0",
-    "electron": "^39.2.7",
-    "electron-builder": "^26.0.12",
     "framer-motion": "^12.23.26",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.4",
@@ -30,8 +29,7 @@
     "react-router-dom": "^7.10.1",
     "recharts": "^3.6.0",
     "socket.io-client": "^4.8.1",
-    "tailwind-merge": "^3.4.0",
-    "wait-on": "^9.0.3"
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -40,6 +38,10 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.23",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -48,6 +50,41 @@
     "tailwindcss": "^3.4.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.hawktravelmate.app",
+    "productName": "Hawk Travelmate",
+    "directories": {
+      "output": "release",
+      "buildResources": "public"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "icon": "public/img/icon.jpeg",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hawk Travelmate"
+    },
+    "publish": null
   }
 }

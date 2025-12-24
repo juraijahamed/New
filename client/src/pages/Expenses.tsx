@@ -132,7 +132,6 @@ const Expenses = () => {
                         onPreview={(url, title) => {
                             setPreviewFile({ url, title, expenseId: row.original.id, isSalary: false });
                         }}
-                        multiple={false}
                     />
                 ),
             },

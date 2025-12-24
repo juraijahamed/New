@@ -27,7 +27,7 @@ const TransactionDistributionChart = () => {
     const expensesPercentage = totalTransactions > 0 ? (expensesCount / totalTransactions) * 100 : 0;
     const supplierPercentage = totalTransactions > 0 ? (supplierCount / totalTransactions) * 100 : 0;
 
-    const segments: TransactionSegment[] = [
+    const segments: TransactionSegment[] = ([
         {
             type: 'sales',
             label: 'Sales',
@@ -58,7 +58,7 @@ const TransactionDistributionChart = () => {
             icon: <CreditCard size={20} />,
             description: 'Payment transactions',
         },
-    ].filter(segment => segment.count > 0); // Only show segments with transactions
+    ] as const).filter(segment => segment.count > 0) as TransactionSegment[]; // Only show segments with transactions
 
     if (totalTransactions === 0) {
         return (

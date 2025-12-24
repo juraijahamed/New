@@ -1,6 +1,7 @@
 import axios from 'axios';
+import config from '../config';
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = config.API_BASE;
 
 const api = axios.create({
     baseURL: API_URL,
@@ -283,7 +284,7 @@ export const fileUploadApi = {
                 data: error.response?.data,
                 url: error.config?.url
             });
-            const errorMessage = error.response?.status === 404 
+            const errorMessage = error.response?.status === 404
                 ? 'Upload endpoint not found. Please ensure the server is running and has the /api/upload endpoint. Check server console for errors.'
                 : error.response?.data?.error || error.message || 'Failed to upload file';
             throw new Error(errorMessage);
@@ -307,7 +308,7 @@ export const fileUploadApi = {
                 data: error.response?.data,
                 url: error.config?.url
             });
-            const errorMessage = error.response?.status === 404 
+            const errorMessage = error.response?.status === 404
                 ? 'Upload endpoint not found. Please ensure the server is running and has the /api/upload-multiple endpoint. Check server console for errors.'
                 : error.response?.data?.error || error.message || 'Failed to upload files';
             throw new Error(errorMessage);

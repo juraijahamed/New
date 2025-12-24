@@ -4,7 +4,7 @@ import {
     flexRender,
     type ColumnDef,
 } from '@tanstack/react-table';
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface DataTableProps<TData> {
     columns: ColumnDef<TData>[];
@@ -17,16 +17,45 @@ interface DataTableProps<TData> {
     } | null;
 }
 
-export function DataTable<TData>({ columns, data, onEdit, compact = false, highlightInfo }: DataTableProps<TData>) {
+export function DataTable<TData>({ columns, data, compact = false, highlightInfo }: DataTableProps<TData>) {
     const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
     const [copiedCell, setCopiedCell] = useState<{ row: number; col: number } | null>(null);
 
+    // Virtualization State
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [scrollTop, setScrollTop] = useState(0);
+    const [containerHeight, setContainerHeight] = useState(600); // Default estimate
+
+    const ROW_HEIGHT = compact ? 36 : 48;
+    const VIRTUALIZATION_THRESHOLD = 200; // Enable virtualization for lists larger than this
+
+    const useVirtualization = data.length > VIRTUALIZATION_THRESHOLD;
+
+    // Handle Scroll for Virtualization
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        setScrollTop(e.currentTarget.scrollTop);
+    };
+
+    // Monitor Container Height
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                setContainerHeight(entry.contentRect.height);
+            }
+        });
+
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, []);
+
     // Handle Copy
-    React.useEffect(() => {
+    useEffect(() => {
         const handleKeyDown = async (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCell) {
                 e.preventDefault();
-                // Find the cell element
+                // Find the cell element using absolute index
                 const cellElement = document.querySelector(`[data-cell-id="${selectedCell.row}-${selectedCell.col}"]`);
                 if (cellElement) {
                     // Try to get text content, removing extra whitespace
@@ -65,10 +94,32 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
         getCoreRowModel: getCoreRowModel(),
     });
 
+    // Virtualization Calculations
+    const allRows = table.getRowModel().rows;
+
+    let visibleRows = allRows;
+    let paddingTop = 0;
+    let paddingBottom = 0;
+
+    if (useVirtualization) {
+        const totalRows = allRows.length;
+        const totalHeight = totalRows * ROW_HEIGHT;
+
+        const overscan = 10;
+        const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - overscan);
+        const visibleCount = Math.ceil(containerHeight / ROW_HEIGHT) + (overscan * 2);
+        const endIndex = Math.min(totalRows, startIndex + visibleCount);
+
+        visibleRows = allRows.slice(startIndex, endIndex);
+        paddingTop = startIndex * ROW_HEIGHT;
+        paddingBottom = Math.max(0, totalHeight - (endIndex * ROW_HEIGHT));
+    }
+
     // Handle Highlighting
-    React.useEffect(() => {
+    useEffect(() => {
         if (highlightInfo && data.length > 0) {
             const { rowId, columnKey } = highlightInfo;
+            // Use loose comparison for IDs
             const rowIndex = data.findIndex((item: any) => String(item.id) === String(rowId));
 
             if (rowIndex !== -1) {
@@ -79,18 +130,31 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
                     if (colIndex === -1) colIndex = 0;
                 }
 
-                // Wait for the table to render
+                // Scroll to the row if virtualized
+                if (useVirtualization && containerRef.current) {
+                    // Center the row
+                    const rowTop = rowIndex * ROW_HEIGHT;
+                    const halfContainer = containerHeight / 2;
+                    containerRef.current.scrollTo({
+                        top: Math.max(0, rowTop - halfContainer + (ROW_HEIGHT / 2)),
+                        behavior: 'smooth'
+                    });
+                } else if (!useVirtualization && containerRef.current) {
+                    // Native scroll behavior for non-virtualized
+                    // Wait for render
+                    setTimeout(() => {
+                        const targetCell = document.querySelector(`[data-cell-id="${rowIndex}-${colIndex}"]`);
+                        if (targetCell) {
+                            targetCell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 100);
+                }
+
+                // Wait for scroll/render
                 setTimeout(() => {
-                    // Scroll target cell into view
-                    const targetCellIdentifier = `[data-cell-id="${rowIndex}-${colIndex}"]`;
-                    const targetCellElement = document.querySelector(targetCellIdentifier) as HTMLElement;
-
-                    if (targetCellElement) {
-                        targetCellElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-                    }
-
-                    // Highlight entire column using attribute selector suffix
+                    // Start Animation
                     const columnCells = document.querySelectorAll(`[data-cell-id$="-${colIndex}"]`);
+                    // Note: In virtualized table, only visible cells will be selected
                     columnCells.forEach((cell) => {
                         cell.classList.add('animate-cue-shining');
                     });
@@ -98,16 +162,16 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
                     // Set as selected cell for focus
                     setSelectedCell({ row: rowIndex, col: colIndex });
 
-                    // Remove effect after animation completes (0.8s * 3 = 2.4s)
+                    // Remove effect after animation completes
                     setTimeout(() => {
                         columnCells.forEach((cell) => {
                             cell.classList.remove('animate-cue-shining');
                         });
                     }, 2500);
-                }, 300);
+                }, useVirtualization ? 500 : 300); // Slightly longer wait for virtualization
             }
         }
-    }, [highlightInfo, data, columns]);
+    }, [highlightInfo, data, columns, useVirtualization, ROW_HEIGHT, containerHeight]);
 
     const handleCellClick = (rowIndex: number, colIndex: number) => {
         if (selectedCell?.row === rowIndex && selectedCell?.col === colIndex) {
@@ -118,9 +182,13 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
     };
 
     return (
-        <div className="w-full overflow-auto">
+        <div
+            ref={containerRef}
+            className="w-full h-full overflow-auto relative"
+            onScroll={handleScroll}
+        >
             <table className="w-full border-collapse" style={{ fontFamily: "'Segoe UI', Calibri, Arial, sans-serif", tableLayout: 'auto' }}>
-                <thead>
+                <thead className="sticky top-0 z-10 shadow-sm">
                     {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
                             {headerGroup.headers.map((header, colIndex) => (
@@ -145,6 +213,12 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
                     ))}
                 </thead>
                 <tbody>
+                    {useVirtualization && paddingTop > 0 && (
+                        <tr>
+                            <td style={{ height: `${paddingTop}px` }} colSpan={columns.length} />
+                        </tr>
+                    )}
+
                     {table.getRowModel().rows.length === 0 ? (
                         <tr>
                             <td
@@ -159,15 +233,17 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
                             </td>
                         </tr>
                     ) : (
-                        table.getRowModel().rows.map((row, rowIndex) => (
+                        visibleRows.map((row) => (
                             <tr
                                 key={row.id}
                                 className="transition-colors"
                                 style={{
-                                    background: rowIndex % 2 === 0 ? '#ffffff' : '#fdf9f3'
+                                    background: row.index % 2 === 0 ? '#ffffff' : '#fdf9f3',
+                                    height: `${ROW_HEIGHT}px`
                                 }}
                             >
                                 {row.getVisibleCells().map((cell, colIndex) => {
+                                    const rowIndex = row.index; // Use absolute index
                                     const isSelected = selectedCell?.row === rowIndex && selectedCell?.col === colIndex;
                                     const isCopied = copiedCell?.row === rowIndex && copiedCell?.col === colIndex;
 
@@ -209,7 +285,8 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
                                                 transition: 'background-color 0.2s, outline-color 0.2s',
                                                 position: 'relative', // Ensure absolute children are positioned relative to this cell
                                                 overflow: 'hidden', // Prevent content from expanding cell
-                                                minWidth: 0 // Allow cell to shrink if needed
+                                                minWidth: 0, // Allow cell to shrink if needed
+                                                height: 'inherit' // Ensure cell takes row height
                                             }}
                                         >
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -224,6 +301,12 @@ export function DataTable<TData>({ columns, data, onEdit, compact = false, highl
                                 })}
                             </tr>
                         ))
+                    )}
+
+                    {useVirtualization && paddingBottom > 0 && (
+                        <tr>
+                            <td style={{ height: `${paddingBottom}px` }} colSpan={columns.length} />
+                        </tr>
                     )}
                 </tbody>
             </table>

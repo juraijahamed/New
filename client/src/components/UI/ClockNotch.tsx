@@ -159,7 +159,7 @@ const ClockNotch = () => {
                 style={{
                     left: leftPosition,
                     WebkitAppRegion: 'drag',
-                }}
+                } as any}
                 initial={{ y: -50, x: '-50%' }}
                 animate={{ y: 0, x: '-50%' }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
@@ -171,9 +171,9 @@ const ClockNotch = () => {
                         boxShadow: '0 4px 20px -5px rgba(93, 64, 55, 0.5)',
                         borderBottom: '1px solid rgba(218, 165, 32, 0.3)',
                         WebkitAppRegion: 'no-drag',
-                    }}
+                    } as any}
                 >
-                    {/* Online Status */}
+                    {/* Online Status + Refresh Button */}
                     <div className="flex items-center gap-1.5">
                         {isServerOnline ? (
                             <>
@@ -191,7 +191,20 @@ const ClockNotch = () => {
                                 <span className="text-[11px] font-medium text-red-400">Offline</span>
                             </>
                         )}
+                        {/* Refresh Button - Right after Online label */}
+                        <motion.button
+                            onClick={handleRefresh}
+                            className="transition-colors flex items-center ml-1"
+                            style={{ color: '#A1887F' }}
+                            whileHover={{ color: '#DAA520', scale: 1.1, rotate: 180 }}
+                            whileTap={{ scale: 0.9 }}
+                            title="Refresh App"
+                        >
+                            <RefreshCw size={13} />
+                        </motion.button>
                     </div>
+
+                    <div className="w-px h-3" style={{ background: 'rgba(218, 165, 32, 0.4)' }} />
 
                     {/* India Clock */}
                     <div
@@ -222,20 +235,6 @@ const ClockNotch = () => {
                     >
                         <ChevronDown size={14} />
                     </motion.div>
-
-                    <div className="w-px h-3" style={{ background: 'rgba(218, 165, 32, 0.4)' }} />
-
-                    {/* Refresh Button */}
-                    <motion.button
-                        onClick={handleRefresh}
-                        className="transition-colors flex items-center"
-                        style={{ color: '#A1887F' }}
-                        whileHover={{ color: '#DAA520', scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        title="Refresh"
-                    >
-                        <RefreshCw size={14} />
-                    </motion.button>
 
                     <div className="w-px h-3" style={{ background: 'rgba(218, 165, 32, 0.4)' }} />
 

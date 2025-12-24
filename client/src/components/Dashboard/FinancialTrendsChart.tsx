@@ -23,31 +23,31 @@ const FinancialTrendsChart = ({ sales, expenses, showProfit = true }: ChartProps
         if (days === 180) {
             // Aggregate by week for half-yearly view (approximately 26 weeks)
             const weeks: Record<string, { sales: number; expenses: number; startDate: Date }> = {};
-            
+
             for (let i = days - 1; i >= 0; i--) {
                 const date = new Date();
                 date.setDate(date.getDate() - i);
                 const dateStr = date.toISOString().split('T')[0];
-                
+
                 // Get week start (Sunday)
                 const weekStart = new Date(date);
                 weekStart.setDate(date.getDate() - date.getDay());
                 weekStart.setHours(0, 0, 0, 0);
                 const weekKey = weekStart.toISOString().split('T')[0];
-                
+
                 if (!weeks[weekKey]) {
                     weeks[weekKey] = { sales: 0, expenses: 0, startDate: new Date(weekStart) };
                 }
-                
+
                 weeks[weekKey].sales += sales
                     .filter(s => s.date === dateStr)
                     .reduce((sum, s) => sum + (s.sales_rate || 0), 0);
-                
+
                 weeks[weekKey].expenses += expenses
                     .filter(e => e.date === dateStr)
                     .reduce((sum, e) => sum + (e.amount || 0), 0);
             }
-            
+
             // Sort weeks by date and create data points
             Object.entries(weeks)
                 .sort(([a], [b]) => a.localeCompare(b))
@@ -64,26 +64,26 @@ const FinancialTrendsChart = ({ sales, expenses, showProfit = true }: ChartProps
         } else if (days === 365) {
             // Aggregate by month for yearly view
             const months: Record<string, { sales: number; expenses: number; month: number; year: number }> = {};
-            
+
             for (let i = days - 1; i >= 0; i--) {
                 const date = new Date();
                 date.setDate(date.getDate() - i);
                 const dateStr = date.toISOString().split('T')[0];
                 const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
-                
+
                 if (!months[monthKey]) {
                     months[monthKey] = { sales: 0, expenses: 0, month: date.getMonth(), year: date.getFullYear() };
                 }
-                
+
                 months[monthKey].sales += sales
                     .filter(s => s.date === dateStr)
                     .reduce((sum, s) => sum + (s.sales_rate || 0), 0);
-                
+
                 months[monthKey].expenses += expenses
                     .filter(e => e.date === dateStr)
                     .reduce((sum, e) => sum + (e.amount || 0), 0);
             }
-            
+
             // Sort months by date and create data points
             Object.entries(months)
                 .sort(([a], [b]) => a.localeCompare(b))
@@ -190,16 +190,16 @@ const FinancialTrendsChart = ({ sales, expenses, showProfit = true }: ChartProps
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e8ddd0" />
-                    <XAxis 
-                        dataKey="name" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fill: '#8D6E63', fontSize: parseInt(timeRange) >= 90 ? 10 : 12 }} 
+                    <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#8D6E63', fontSize: parseInt(timeRange) >= 90 ? 10 : 12 }}
                         dy={10}
                         angle={parseInt(timeRange) >= 90 ? -45 : 0}
                         textAnchor={parseInt(timeRange) >= 90 ? 'end' : 'middle'}
                         height={parseInt(timeRange) >= 90 ? 60 : 30}
-                        interval={parseInt(timeRange) === 180 ? 1 : parseInt(timeRange) === 365 ? 0 : 0}
+                        interval="preserveStartEnd"
                     />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8D6E63', fontSize: 12 }} />
                     <Tooltip
@@ -210,12 +210,13 @@ const FinancialTrendsChart = ({ sales, expenses, showProfit = true }: ChartProps
                             background: 'white'
                         }}
                         labelStyle={{ color: '#5D4037', fontWeight: 600 }}
-                        formatter={(value: number, name: string) => {
-                            const formattedValue = Math.abs(value).toLocaleString('en-US', {
+                        formatter={(value: number | undefined, name: string | undefined) => {
+                            const val = value || 0;
+                            const formattedValue = Math.abs(val).toLocaleString('en-US', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                             });
-                            return [`AED ${formattedValue}`, name];
+                            return [`AED ${formattedValue}`, name || ''];
                         }}
                     />
                     <Legend

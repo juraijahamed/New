@@ -9,7 +9,7 @@ import { useData } from '../context/DataContext';
 const Dashboard = () => {
     const { dashboardStats, isLoading, expenses, sales } = useData();
     const [showProfits, setShowProfits] = useState(false);
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const timeoutRef = useRef<any>(null);
 
     // Auto-hide profits after 15 seconds when they are shown
     useEffect(() => {

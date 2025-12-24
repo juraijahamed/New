@@ -18,26 +18,7 @@ const defaultStatusColors: Record<string, { bg: string; text: string; border: st
     'default': { bg: '#FFFFFF', text: '#374151', border: '#D1D5DB' }
 };
 
-// Helper function to determine text color based on background
-const getTextColor = (bgColor: string): string => {
-    if (!bgColor) return '#374151';
-    const hex = bgColor.replace('#', '');
-    const r = parseInt(hex.substr(0, 2), 16);
-    const g = parseInt(hex.substr(2, 2), 16);
-    const b = parseInt(hex.substr(4, 2), 16);
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    return brightness > 155 ? '#000000' : '#FFFFFF';
-};
 
-// Helper function to darken color for border
-const darkenColor = (color: string, amount: number = 0.2): string => {
-    if (!color) return '#D1D5DB';
-    const hex = color.replace('#', '');
-    const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - Math.round(255 * amount));
-    const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - Math.round(255 * amount));
-    const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - Math.round(255 * amount));
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-};
 
 export const StatusSelect: React.FC<StatusSelectProps> = ({ value, onChange, className }) => {
     const currentStatus = value === 'draft' ? '' : (value || '');

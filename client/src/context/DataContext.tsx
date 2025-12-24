@@ -1,12 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import io from 'socket.io-client';
+import config from '../config';
 import {
     expensesApi, salesApi, staffApi, supplierPaymentsApi, salaryPaymentsApi, dashboardApi, healthApi,
     type Expense, type Sale, type Staff, type SupplierPayment, type SalaryPayment, type DashboardStats
 } from '../services/api';
 
-const API_URL = 'http://localhost:3001';
-const socket = io(API_URL);
+const socket = io(config.SOCKET_URL, {
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+});
+
+// Debug: Log all socket activity
+socket.onAny((event, ...args) => {
+    console.log(`[Socket.IO Event] ${event}:`, args);
+});
 
 interface DataContextType {
     // Data
@@ -178,11 +188,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Connection status
         socket.on('connect', () => {
-            console.log('Socket.IO connected');
+            console.log('Socket.IO connected with ID:', socket.id);
             setIsServerOnline(true);
         });
-        socket.on('disconnect', () => {
-            console.log('Socket.IO disconnected');
+        socket.on('connect_error', (error) => {
+            console.error('Socket.IO connection error:', error);
+            // Don't set offline immediately, let health check handle it or wait for retry
+        });
+        socket.on('disconnect', (reason) => {
+            console.log('Socket.IO disconnected. Reason:', reason);
             setIsServerOnline(false);
         });
 
@@ -247,7 +261,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const user_id = getCurrentUserId();
         const expenseWithUser = { ...expense, user_id };
         const newExpense = await expensesApi.create(expenseWithUser);
-        // No need to manually update state - Socket.IO event will handle it
+        await Promise.all([refreshExpenses(), refreshDashboard()]);
         return newExpense;
     };
 
@@ -255,18 +269,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const user_id = getCurrentUserId();
         const expenseWithUser = { ...expense, user_id };
         await expensesApi.update(id, expenseWithUser);
-        // Socket.IO event will update state
+        await Promise.all([refreshExpenses(), refreshDashboard()]);
     };
 
     const deleteExpense = async (id: number) => {
         await expensesApi.delete(id);
-        // Socket.IO event will update state
+        await Promise.all([refreshExpenses(), refreshDashboard()]);
     };
 
     const addSale = async (sale: Omit<Sale, 'id'>) => {
         const user_id = getCurrentUserId();
         const saleWithUser = { ...sale, user_id };
         const newSale = await salesApi.create(saleWithUser);
+        await Promise.all([refreshSales(), refreshDashboard()]);
         return newSale;
     };
 
@@ -274,10 +289,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const user_id = getCurrentUserId();
         const saleWithUser = { ...sale, user_id };
         await salesApi.update(id, saleWithUser);
+        await Promise.all([refreshSales(), refreshDashboard()]);
     };
 
     const deleteSale = async (id: number) => {
         await salesApi.delete(id);
+        await Promise.all([refreshSales(), refreshDashboard()]);
     };
 
     const addStaff = async (staffData: Omit<Staff, 'id'>) => {
@@ -300,6 +317,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const user_id = getCurrentUserId();
         const paymentWithUser = { ...payment, user_id };
         const newPayment = await supplierPaymentsApi.create(paymentWithUser);
+        await Promise.all([refreshSupplierPayments(), refreshDashboard()]);
         return newPayment;
     };
 
@@ -307,16 +325,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const user_id = getCurrentUserId();
         const paymentWithUser = { ...payment, user_id };
         await supplierPaymentsApi.update(id, paymentWithUser);
+        await Promise.all([refreshSupplierPayments(), refreshDashboard()]);
     };
 
     const deleteSupplierPayment = async (id: number) => {
         await supplierPaymentsApi.delete(id);
+        await Promise.all([refreshSupplierPayments(), refreshDashboard()]);
     };
 
     const addSalaryPayment = async (payment: Omit<SalaryPayment, 'id'>) => {
         const user_id = getCurrentUserId();
         const paymentWithUser = { ...payment, user_id };
         const newPayment = await salaryPaymentsApi.create(paymentWithUser);
+        await Promise.all([refreshSalaryPayments(), refreshDashboard()]);
         return newPayment;
     };
 
@@ -324,10 +345,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const user_id = getCurrentUserId();
         const paymentWithUser = { ...payment, user_id };
         await salaryPaymentsApi.update(id, paymentWithUser);
+        await Promise.all([refreshSalaryPayments(), refreshDashboard()]);
     };
 
     const deleteSalaryPayment = async (id: number) => {
         await salaryPaymentsApi.delete(id);
+        await Promise.all([refreshSalaryPayments(), refreshDashboard()]);
     };
 
     return (

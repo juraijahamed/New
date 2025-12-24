@@ -110,7 +110,6 @@ const SupplierPayments = () => {
                         onPreview={(url, title) => {
                             setPreviewFile({ url, title, paymentId: row.original.id });
                         }}
-                        multiple={false}
                     />
                 ),
             },

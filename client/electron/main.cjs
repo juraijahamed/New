@@ -15,7 +15,9 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
         },
-        // icon: path.join(__dirname, 'icon.png')
+        icon: process.env.NODE_ENV === 'development'
+            ? path.join(__dirname, '../public/img/icon.jpeg')
+            : path.join(__dirname, '../dist/img/icon.jpeg')
     });
 
     if (process.env.NODE_ENV === 'development') {

@@ -3,6 +3,8 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const { S3Client } = require('@aws-sdk/client-s3');
+const multerS3 = require('multer-s3');
 const http = require('http');
 const { Server } = require('socket.io');
 const { pool, initSchema } = require('./db');
@@ -11,8 +13,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // In production, specify exact origins
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+    origin: "*",
+    methods: ["GET", "POST"]
   }
 });
 const port = 3001;
@@ -24,7 +26,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // Configure multer for file uploads
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
@@ -34,13 +36,29 @@ const storage = multer.diskStorage({
   }
 });
 
+const s3Storage = process.env.USE_S3 === 'true' && process.env.S3_BUCKET_NAME ? multerS3({
+  s3: new S3Client({ region: process.env.AWS_REGION || process.env.aws_region || 'ap-southeast-2' }),
+  bucket: process.env.S3_BUCKET_NAME,
+  contentType: multerS3.AUTO_CONTENT_TYPE,
+  key: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'uploads/' + uniqueSuffix + path.extname(file.originalname));
+  }
+}) : null;
+
+// Use S3 storage if configured, otherwise fallback to disk
+const storage = s3Storage || diskStorage;
+
 const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true, // Allow any origin
+  credentials: true
+}));
 app.use(express.json());
 
 // Serve static files from uploads directory
@@ -50,6 +68,13 @@ async function start() {
   // Initialize DB schema in Postgres
   await initSchema();
   console.log('Postgres schema initialized successfully');
+
+  // Log Storage Mode
+  if (process.env.USE_S3 === 'true' && process.env.S3_BUCKET_NAME) {
+    console.log(`Storage Mode: S3 (Bucket: ${process.env.S3_BUCKET_NAME})`);
+  } else {
+    console.log('Storage Mode: Local Disk (Warning: Files are ephemeral in App Runner)');
+  }
 
   // ============ ROUTES ============
 
@@ -677,16 +702,20 @@ async function start() {
   // ============ FILE UPLOAD ============
   app.post('/api/upload', upload.single('file'), (req, res) => {
     try {
-      console.log('Upload endpoint hit');
-      console.log('Request file:', req.file);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Upload endpoint hit');
+        console.log('Request file:', req.file);
+      }
       if (!req.file) {
-        console.log('No file in request');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('No file in request');
+        }
         return res.status(400).json({ error: 'No file uploaded' });
       }
       const response = {
-        filename: req.file.filename,
+        filename: req.file.key || req.file.filename,
         originalName: req.file.originalname,
-        path: `/uploads/${req.file.filename}`
+        path: req.file.location || `/uploads/${req.file.filename}`
       };
       console.log('Upload successful:', response);
       res.json(response);
@@ -703,9 +732,9 @@ async function start() {
         return res.status(400).json({ error: 'No files uploaded' });
       }
       const files = req.files.map(file => ({
-        filename: file.filename,
+        filename: file.key || file.filename,
         originalName: file.originalname,
-        path: `/uploads/${file.filename}`
+        path: file.location || `/uploads/${file.filename}`
       }));
       res.json({ files });
     } catch (error) {

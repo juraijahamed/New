@@ -195,7 +195,6 @@ const Sales = () => {
                         onPreview={(url, title) => {
                             setPreviewFile({ url, title, saleId: row.original.id });
                         }}
-                        multiple={false}
                     />
                 ),
             },

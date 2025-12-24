@@ -77,7 +77,7 @@ const Login = () => {
                                 boxShadow: '0 0 30px rgba(218, 165, 32, 0.4)'
                             }}
                         >
-                            <img src="/img/icon.jpeg" alt="Logo" className="w-full h-full object-cover" />
+                            <img src="img/icon.jpeg" alt="Logo" className="w-full h-full object-cover" />
                         </div>
                     </motion.div>
 

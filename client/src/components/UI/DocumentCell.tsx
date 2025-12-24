@@ -7,7 +7,6 @@ interface DocumentCellProps {
     onUpdate: (documents: string) => Promise<void>;
     apiBaseUrl?: string;
     onPreview?: (url: string, title: string) => void;
-    multiple?: boolean;
 }
 
 export const DocumentCell: React.FC<DocumentCellProps> = ({
@@ -15,11 +14,9 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
     onUpdate,
     apiBaseUrl = 'http://localhost:3001',
     onPreview,
-    multiple = false,
 }) => {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const files = value ? value.split(',').filter(f => f.trim()) : [];
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const inputFiles = e.target.files;
@@ -43,7 +40,13 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
     const handleViewFile = (fileUrl: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (!onPreview) return;
-        onPreview(`${apiBaseUrl}${fileUrl}`, 'Document');
+
+        // If it sends a full URL (like S3), use it directly. Otherwise prepend API base.
+        const fullUrl = fileUrl.startsWith('http')
+            ? fileUrl
+            : `${apiBaseUrl}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+
+        onPreview(fullUrl, 'Document');
     };
 
     const handleDeleteFile = async (e: React.MouseEvent) => {
