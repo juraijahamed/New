@@ -1,6 +1,6 @@
 {
   "name": "hawk-travelmate",
-  "productName": "Hawk Travelmate",
+  "productName": "Hawk Travelmate Dashboard",
   "private": true,
   "version": "1.0.0",
   "description": "Travel Agency Management System",
@@ -55,10 +55,16 @@
   },
   "build": {
     "appId": "com.hawktravelmate.app",
-    "productName": "Hawk Travelmate",
+    "productName": "Hawk Travelmate Dashboard",
     "directories": {
       "output": "release",
       "buildResources": "public"
+    },
+    "compression": "maximum",
+    "asar": true,
+    "removePackageScripts": true,
+    "extraMetadata": {
+      "main": "electron/main.cjs"
     },
     "files": [
       "dist/**/*",
@@ -66,7 +72,7 @@
       "!node_modules/**/*"
     ],
     "win": {
-      "icon": "public/img/icon.jpeg",
+      "icon": "public/img/Hawk-icon.png",
       "target": [
         {
           "target": "nsis",
@@ -83,7 +89,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Hawk Travelmate"
+      "shortcutName": "Hawk Travelmate Dashboard"
     },
     "publish": null
   }

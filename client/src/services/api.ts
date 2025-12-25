@@ -290,6 +290,14 @@ export const fileUploadApi = {
             throw new Error(errorMessage);
         }
     },
+    deleteFile: async (filePath: string): Promise<void> => {
+        try {
+            await api.post('/upload/delete', { filePath });
+        } catch (error) {
+            console.error('File deletion error:', error);
+            // Non-critical error, don't throw to avoid blocking UI cleanup
+        }
+    },
     uploadMultiple: async (files: File[]): Promise<MultipleUploadResponse> => {
         const formData = new FormData();
         files.forEach(file => {

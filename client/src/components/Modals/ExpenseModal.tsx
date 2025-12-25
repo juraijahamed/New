@@ -30,6 +30,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
         remarks: '',
     });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedSalaryFile, setSelectedSalaryFile] = useState<File | null>(null);
 
     const [salaryData, setSalaryData] = useState({
         staff_id: '',
@@ -39,6 +40,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
         paid_month: new Date().toISOString().slice(0, 7),
         date: new Date().toISOString().split('T')[0],
         remarks: '',
+        receipt_url: '',
     });
 
     // Load dropdown options
@@ -73,6 +75,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                     paid_month: salary.paid_month || new Date().toISOString().slice(0, 7),
                     date: salary.date || new Date().toISOString().split('T')[0],
                     remarks: salary.remarks || '',
+                    receipt_url: salary.receipt_url || '',
                 });
                 setActiveTab('salary');
                 // Reset general form
@@ -114,6 +117,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                     paid_month: new Date().toISOString().slice(0, 7),
                     date: new Date().toISOString().split('T')[0],
                     remarks: '',
+                    receipt_url: '',
                 });
             }
         } else {
@@ -135,6 +139,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                 paid_month: new Date().toISOString().slice(0, 7),
                 date: new Date().toISOString().split('T')[0],
                 remarks: '',
+                receipt_url: '',
             });
             setActiveTab('general');
         }
@@ -198,6 +203,20 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
 
         try {
             const selectedStaff = staff.find(s => s.id === parseInt(salaryData.staff_id));
+            let receiptUrl = salaryData.receipt_url || null;
+            
+            // Handle file upload if selected
+            if (selectedSalaryFile) {
+                try {
+                    const uploadResult = await fileUploadApi.uploadSingle(selectedSalaryFile);
+                    receiptUrl = uploadResult.path;
+                } catch (uploadError: any) {
+                    setError(`File upload failed: ${uploadError.message || 'Unknown error'}`);
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+            
             const salaryPayment: Omit<SalaryPayment, 'id'> = {
                 staff_id: parseInt(salaryData.staff_id),
                 staff_name: selectedStaff?.name || salaryData.staff_name,
@@ -205,6 +224,7 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                 advance: parseFloat(salaryData.advance) || 0,
                 paid_month: salaryData.paid_month,
                 date: salaryData.date,
+                receipt_url: receiptUrl || undefined,
                 remarks: salaryData.remarks,
                 status: 'draft',
             };
@@ -233,6 +253,19 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
             setSelectedFile(file);
             setFormData({ ...formData, receipt_url: file.name });
         }
+    };
+
+    const handleSalaryFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedSalaryFile(file);
+            setSalaryData({ ...salaryData, receipt_url: file.name });
+        }
+    };
+
+    const clearSalaryFile = () => {
+        setSelectedSalaryFile(null);
+        setSalaryData({ ...salaryData, receipt_url: '' });
     };
 
     const handleStaffSelect = (staffId: string) => {
@@ -567,6 +600,44 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                             rows={2}
                             placeholder="Additional notes..."
                         />
+                    </div>
+
+                    {/* Payment Proof Upload */}
+                    <div>
+                        <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Payment Proof (Optional)</label>
+                        <div className="flex items-center gap-3">
+                            <label className="flex-1 cursor-pointer">
+                                <div 
+                                    className="border-2 border-dashed border-amber-300 bg-amber-50/30 rounded-xl p-4 text-center transition-colors hover:border-amber-400 hover:bg-amber-50 flex flex-col items-center justify-center"
+                                    style={{ minHeight: '100px' }}
+                                >
+                                    <Upload size={24} className="text-amber-600 mb-2" />
+                                    <p className="text-sm text-amber-700">
+                                        {selectedSalaryFile ? selectedSalaryFile.name : 'Click to upload payment proof'}
+                                    </p>
+                                    <p className="text-xs text-amber-600 mt-1">PDF, JPG, PNG (Max 10MB)</p>
+                                </div>
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="application/pdf,image/*"
+                                    onChange={(e) => handleSalaryFileChange(e)}
+                                />
+                            </label>
+                            {selectedSalaryFile && (
+                                <button
+                                    type="button"
+                                    onClick={clearSalaryFile}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Remove file"
+                                >
+                                    <X size={20} />
+                                </button>
+                            )}
+                        </div>
+                        {salaryData.receipt_url && !selectedSalaryFile && (
+                            <p className="text-xs text-gray-500 mt-1">Current: {salaryData.receipt_url}</p>
+                        )}
                     </div>
 
                     <div className="sticky bottom-0 bg-white pt-4 mt-4 pb-1" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)', zIndex: 10 }}>

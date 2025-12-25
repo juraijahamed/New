@@ -1,11 +1,8 @@
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useMemo } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { DataProvider } from './context/DataContext';
-import { SuggestionProvider } from './context/SuggestionContext';
+import { useAuth } from './context/AuthContext';
 import Sidebar from './components/Layout/Sidebar';
 import TitleBar from './components/Layout/TitleBar';
-import ClockNotch from './components/UI/ClockNotch';
 import Dashboard from './pages/Dashboard';
 import Expenses from './pages/Expenses';
 import Sales from './pages/Sales';
@@ -53,22 +50,18 @@ function AppRoutes() {
   const contentPadding = 0;
 
   return (
-    <Routes>
-      <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
-
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <DataProvider>
-              <SuggestionProvider>
+    <div className="h-screen flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
+        <Routes>
+          <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
                 <div
                   className="flex h-screen overflow-hidden font-sans"
                   style={{ background: 'linear-gradient(135deg, #faf8f5 0%, #f5f0e8 50%, #ece4d9 100%)' }}
                 >
-                  {/* Clock Notch */}
-                  <ClockNotch />
-
                   <Sidebar />
                   <main
                     className="flex-1 overflow-y-auto overflow-x-hidden"
@@ -99,23 +92,21 @@ function AppRoutes() {
                     </div>
                   </main>
                 </div>
-              </SuggestionProvider>
-            </DataProvider>
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </div>
+    </div>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <TitleBar />
-        <AppRoutes />
-      </Router>
-    </AuthProvider>
+    <Router>
+      <TitleBar />
+      <AppRoutes />
+    </Router>
   );
 }
 

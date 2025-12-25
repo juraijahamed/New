@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { FileText, Upload, Loader2 } from 'lucide-react';
 import { fileUploadApi } from '../../services/api';
+import config from '../../config';
 
 interface DocumentCellProps {
     value: string | null | undefined;
@@ -12,7 +13,7 @@ interface DocumentCellProps {
 export const DocumentCell: React.FC<DocumentCellProps> = ({
     value,
     onUpdate,
-    apiBaseUrl = 'http://localhost:3001',
+    apiBaseUrl = config.API_URL,
     onPreview,
 }) => {
     const [isUploading, setIsUploading] = useState(false);
@@ -37,20 +38,47 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
         }
     };
 
+    const getProxiedUrl = (url: string) => {
+        if (!url) return '';
+
+        // If it's already a proxied path or doesn't start with http, prepend API base
+        if (!url.startsWith('http')) {
+            // Handle case where just a filename is stored (e.g., from old incorrect implementation)
+            if (!url.startsWith('/api/uploads/')) {
+                // If it's just a filename, convert it to the proper path format
+                const filename = url.startsWith('uploads/') ? url.replace('uploads/', '') : url;
+                return `${apiBaseUrl}/api/uploads/${filename}`;
+            }
+            return `${apiBaseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+        }
+
+        // If it's a direct S3 URL, convert it to our proxy URL
+        if (url.includes('s3.amazonaws.com')) {
+            try {
+                const urlObj = new URL(url);
+                // Extract key (remove leading slash)
+                const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname;
+                // Prepend our API proxy base
+                return `${apiBaseUrl}/api/uploads/${key.split('/').pop()}`;
+            } catch (e) {
+                return url;
+            }
+        }
+
+        return url;
+    };
+
     const handleViewFile = (fileUrl: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (!onPreview) return;
-
-        // If it sends a full URL (like S3), use it directly. Otherwise prepend API base.
-        const fullUrl = fileUrl.startsWith('http')
-            ? fileUrl
-            : `${apiBaseUrl}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
-
-        onPreview(fullUrl, 'Document');
+        onPreview(getProxiedUrl(fileUrl), 'Document');
     };
 
     const handleDeleteFile = async (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (value) {
+            await fileUploadApi.deleteFile(value);
+        }
         await onUpdate('');
     };
 

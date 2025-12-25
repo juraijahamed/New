@@ -11,6 +11,32 @@ provider "aws" {
   region = "ap-southeast-2"
 }
 
+# Import existing resources to track them in state
+import {
+  to = aws_ecr_repository.backend_repo
+  id = "hawk-travelmate-backend"
+}
+
+import {
+  to = aws_s3_bucket.uploads_bucket
+  id = "hawk-travemate-uploads"
+}
+
+import {
+  to = aws_iam_role.apprunner_access_role
+  id = "AppRunnerECRAccessRole"
+}
+
+import {
+  to = aws_iam_policy.s3_access_policy
+  id = "arn:aws:iam::564827067264:policy/AppRunnerS3AccessPolicy"
+}
+
+import {
+  to = aws_apprunner_service.backend
+  id = "arn:aws:apprunner:ap-southeast-2:564827067264:service/hawk-travelmate-backend/96364abdb9524136b9d9d2516374a40e"
+}
+
 # 1. ECR Repository
 resource "aws_ecr_repository" "backend_repo" {
   name                 = "hawk-travelmate-backend"
@@ -116,7 +142,7 @@ resource "aws_apprunner_service" "backend" {
           USE_S3           = "true"
           S3_BUCKET_NAME   = "hawk-travemate-uploads"
           AWS_REGION       = "ap-southeast-2"
-          # DATABASE_URL   = "..." (Can be added here if needed)
+          DATABASE_URL     = "postgresql://neondb_owner:npg_cGZgh15lQteo@ep-orange-mountain-a7nxjzpi-pooler.ap-southeast-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
         }
       }
     }

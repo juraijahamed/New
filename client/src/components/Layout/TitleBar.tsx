@@ -1,5 +1,6 @@
 import { Minus, Square, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import ClockNotch from "../UI/ClockNotch";
 
 type TitleButtonProps = {
     label: string;
@@ -89,13 +90,19 @@ const TitleBar = () => {
                 }}
             />
 
+            {/* Center Area with ClockNotch */}
             <div
+                className="flex justify-center items-center"
                 style={{
                     flex: 1,
                     height: "100%",
                     WebkitAppRegion: "drag",
                 } as any}
-            />
+            >
+                <div style={{ WebkitAppRegion: "no-drag" } as any}>
+                    <ClockNotch />
+                </div>
+            </div>
 
             <div
                 className="flex items-center h-full gap-2"

@@ -7,15 +7,16 @@ import {
 } from '../services/api';
 
 const socket = io(config.SOCKET_URL, {
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
     reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
+    reconnectionAttempts: 20,
+    reconnectionDelay: 2000,
+    timeout: 30000,
 });
 
-// Debug: Log all socket activity
-socket.onAny((event, ...args) => {
-    console.log(`[Socket.IO Event] ${event}:`, args);
+// Debug: Only log connection errors
+socket.on('connect_error', (err) => {
+    console.warn('[Socket.IO] Connection Error:', err.message);
 });
 
 interface DataContextType {
@@ -107,6 +108,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const refreshAll = useCallback(async () => {
+        if (!getCurrentUserId()) {
+            setIsLoading(false);
+            return;
+        }
         setIsLoading(true);
         try {
             await Promise.all([
@@ -193,7 +198,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         socket.on('connect_error', (error) => {
             console.error('Socket.IO connection error:', error);
-            // Don't set offline immediately, let health check handle it or wait for retry
         });
         socket.on('disconnect', (reason) => {
             console.log('Socket.IO disconnected. Reason:', reason);
@@ -218,7 +222,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [refreshDashboard]);
 
-    // Health Check Effect
+    // Health Check Effect (Always runs)
     useEffect(() => {
         const checkHealth = async () => {
             const online = await healthApi.check();
@@ -239,7 +243,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Initial load
     useEffect(() => {
-        refreshAll();
+        if (getCurrentUserId()) {
+            refreshAll();
+        } else {
+            setIsLoading(false);
+        }
     }, [refreshAll]);
 
     // Helper to get current user_id from localStorage

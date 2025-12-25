@@ -9,6 +9,7 @@ function createWindow() {
         height: 800,
         frame: false,
         titleBarStyle: 'hidden',
+        title: 'Hawk Travelmate Dashboard',
         autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'),
@@ -16,8 +17,8 @@ function createWindow() {
             contextIsolation: true,
         },
         icon: process.env.NODE_ENV === 'development'
-            ? path.join(__dirname, '../public/img/icon.jpeg')
-            : path.join(__dirname, '../dist/img/icon.jpeg')
+            ? path.join(__dirname, '../public/img/Hawk-icon.png')
+            : path.join(__dirname, '../dist/img/Hawk-icon.png')
     });
 
     if (process.env.NODE_ENV === 'development') {

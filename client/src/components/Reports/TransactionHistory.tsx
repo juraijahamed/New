@@ -1,13 +1,12 @@
 import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownLeft, DollarSign, Receipt, Users, Building2, Calendar, UserPlus, UserCheck } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { useNavigate } from 'react-router-dom';
 
 interface Transaction {
     id: string;
     type: 'sale' | 'expense' | 'supplier_payment' | 'salary_payment';
     date: Date;
-    modifiedDate: Date;
+    modifiedDate: Date; // For sorting by date modified
     amount: number;
     description: string;
     status?: string;
@@ -22,33 +21,44 @@ interface TransactionHistoryProps {
     filterYear?: number;
 }
 
-const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps) => {
+const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, filterYear }) => {
     const { sales, expenses, supplierPayments, salaryPayments } = useData();
-    const navigate = useNavigate();
 
-    const formatRemarks = (remark: string) => {
-        const remarkMap: Record<string, string> = {
-            'pending': 'Pending',
-            'credited': 'Credited',
-            'transferred': 'Transferred',
-            'canceled': 'Canceled',
-            'cleared': 'Cleared',
-            'on-hold': 'On Hold'
-        };
-        return remarkMap[remark] || remark;
-    };
+    // Filter transactions based on filterMonth and filterYear if provided
+    const filteredSales = filterMonth !== undefined && filterYear !== undefined
+        ? sales.filter(sale => {
+            const saleDate = new Date(sale.date);
+            return saleDate.getMonth() === filterMonth && saleDate.getFullYear() === filterYear;
+        })
+        : sales;
+
+    const filteredExpenses = filterMonth !== undefined && filterYear !== undefined
+        ? expenses.filter(expense => {
+            const expenseDate = new Date(expense.date);
+            return expenseDate.getMonth() === filterMonth && expenseDate.getFullYear() === filterYear;
+        })
+        : expenses;
+
+    const filteredSupplierPayments = filterMonth !== undefined && filterYear !== undefined
+        ? supplierPayments.filter(payment => {
+            const paymentDate = new Date(payment.date);
+            return paymentDate.getMonth() === filterMonth && paymentDate.getFullYear() === filterYear;
+        })
+        : supplierPayments;
+
+    const filteredSalaryPayments = filterMonth !== undefined && filterYear !== undefined
+        ? salaryPayments.filter(payment => {
+            const paymentDate = new Date(payment.date);
+            return paymentDate.getMonth() === filterMonth && paymentDate.getFullYear() === filterYear;
+        })
+        : salaryPayments;
 
     // Combine all transactions
     const transactions: Transaction[] = [];
 
-    const isMonthFiltered = filterMonth !== undefined && filterYear !== undefined;
-
     // Add sales
-    sales.forEach((sale) => {
+    filteredSales.forEach((sale) => {
         const saleDate = new Date(sale.date);
-        if (isMonthFiltered) {
-            if (saleDate.getMonth() !== filterMonth || saleDate.getFullYear() !== filterYear) return;
-        }
         const modifiedDate = sale.updated_at ? new Date(sale.updated_at) : (sale.created_at ? new Date(sale.created_at) : saleDate);
         transactions.push({
             id: `sale-${sale.id}`,
@@ -66,11 +76,8 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
     });
 
     // Add expenses
-    expenses.forEach((expense) => {
+    filteredExpenses.forEach((expense) => {
         const expenseDate = new Date(expense.date);
-        if (isMonthFiltered) {
-            if (expenseDate.getMonth() !== filterMonth || expenseDate.getFullYear() !== filterYear) return;
-        }
         const modifiedDate = expense.updated_at ? new Date(expense.updated_at) : (expense.created_at ? new Date(expense.created_at) : expenseDate);
         transactions.push({
             id: `expense-${expense.id}`,
@@ -88,11 +95,8 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
     });
 
     // Add supplier payments
-    supplierPayments.forEach((payment) => {
+    filteredSupplierPayments.forEach((payment) => {
         const paymentDate = new Date(payment.date);
-        if (isMonthFiltered) {
-            if (paymentDate.getMonth() !== filterMonth || paymentDate.getFullYear() !== filterYear) return;
-        }
         const modifiedDate = payment.updated_at ? new Date(payment.updated_at) : (payment.created_at ? new Date(payment.created_at) : paymentDate);
         transactions.push({
             id: `supplier-${payment.id}`,
@@ -110,11 +114,8 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
     });
 
     // Add salary payments
-    salaryPayments.forEach((payment) => {
+    filteredSalaryPayments.forEach((payment) => {
         const paymentDate = new Date(payment.date);
-        if (isMonthFiltered) {
-            if (paymentDate.getMonth() !== filterMonth || paymentDate.getFullYear() !== filterYear) return;
-        }
         const modifiedDate = payment.updated_at ? new Date(payment.updated_at) : (payment.created_at ? new Date(payment.created_at) : paymentDate);
         transactions.push({
             id: `salary-${payment.id}`,
@@ -130,35 +131,6 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
             updated_by: payment.updated_by,
         });
     });
-
-    const handleTransactionClick = (transaction: Transaction) => {
-        const [type, id] = transaction.id.split('-');
-        let path = '';
-        let highlightKey = '';
-
-        switch (type) {
-            case 'sale':
-                path = '/sales';
-                highlightKey = 'agency'; // Default highlight for sales
-                break;
-            case 'expense':
-                path = '/expenses';
-                highlightKey = 'description';
-                break;
-            case 'supplier':
-                path = '/supplier-payments';
-                highlightKey = 'supplier_name';
-                break;
-            case 'salary':
-                path = '/expenses'; // Salaries are on the expenses page
-                highlightKey = 'staff_name';
-                break;
-        }
-
-        if (path) {
-            navigate(`${path}?highlightId=${id}&highlightKey=${highlightKey}`);
-        }
-    };
 
     // Sort by date modified (updated_at) first, then by created_at, then by date (newest first)
     transactions.sort((a, b) => {
@@ -262,8 +234,7 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: (groupIndex * 0.1) + (index * 0.05) }}
-                                onClick={() => handleTransactionClick(transaction)}
-                                className={`px-6 py-4 border-b border-gray-100 last:border-b-0 cursor-pointer hover:bg-black/[0.03] transition-all active:scale-[0.99] ${getTransactionColor(transaction.type)}`}
+                                className={`px-6 py-4 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors ${getTransactionColor(transaction.type)}`}
                             >
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex items-start gap-4 flex-1">
@@ -289,11 +260,11 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
                                             </p>
                                         </div>
                                     </div>
-                                    {/* Center section: Created by and Updated by */}
+                                    {/* Center section: Notes, Created by, and Updated by */}
                                     <div className="flex flex-col items-center justify-center flex-1 px-4 min-w-0">
                                         {transaction.remarks && transaction.remarks.trim() !== '' && (
                                             <p className="text-xs text-gray-600 mb-1" title={transaction.remarks}>
-                                                Notes: <span className="text-gray-700 font-medium">{formatRemarks(transaction.remarks)}</span>
+                                                Notes: <span className="text-gray-700 font-medium">{transaction.remarks}</span>
                                             </p>
                                         )}
                                         <p className="text-xs text-gray-600 flex items-center gap-1.5 font-medium whitespace-nowrap">
@@ -318,8 +289,9 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
                                                 <ArrowDownLeft size={18} className="text-red-600" />
                                             )}
                                             <span
-                                                className={`text-lg font-bold ${transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
-                                                    }`}
+                                                className={`text-lg font-bold ${
+                                                    transaction.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                                                }`}
                                             >
                                                 {transaction.amount >= 0 ? '+' : ''}
                                                 AED {Math.abs(transaction.amount).toLocaleString('en-US', {
@@ -328,21 +300,21 @@ const TransactionHistory = ({ filterMonth, filterYear }: TransactionHistoryProps
                                                 })}
                                             </span>
                                         </div>
-                                        {transaction.status &&
-                                            transaction.status !== 'draft' &&
-                                            transaction.status.trim() !== '' &&
-                                            transaction.status.toLowerCase() !== 'completed' && (
-                                                <span
-                                                    className="px-2 py-1 text-xs font-medium rounded-full text-white shadow-sm"
-                                                    style={{
-                                                        backgroundColor: getStatusColor(transaction.status),
-                                                    }}
-                                                >
-                                                    {transaction.status.split('-').map(word =>
-                                                        word.charAt(0).toUpperCase() + word.slice(1)
-                                                    ).join(' ')}
-                                                </span>
-                                            )}
+                                        {transaction.status && 
+                                         transaction.status !== 'draft' && 
+                                         transaction.status.trim() !== '' && 
+                                         transaction.status.toLowerCase() !== 'completed' && (
+                                            <span 
+                                                className="px-2 py-1 text-xs font-medium rounded-full text-white shadow-sm"
+                                                style={{
+                                                    backgroundColor: getStatusColor(transaction.status),
+                                                }}
+                                            >
+                                                {transaction.status.split('-').map(word => 
+                                                    word.charAt(0).toUpperCase() + word.slice(1)
+                                                ).join(' ')}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </motion.div>

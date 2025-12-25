@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const { S3Client } = require('@aws-sdk/client-s3');
+const { S3Client, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const multerS3 = require('multer-s3');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -13,9 +13,16 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: (origin, callback) => {
+      // Allow all origins, including null/file:// (common in Electron)
+      callback(null, true);
+    },
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  allowEIO3: true, // Support for older clients if needed
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 const port = 3001;
 
@@ -25,7 +32,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configure multer for file uploads
+// Configure storage engines
 const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
@@ -36,23 +43,48 @@ const diskStorage = multer.diskStorage({
   }
 });
 
-const s3Storage = process.env.USE_S3 === 'true' && process.env.S3_BUCKET_NAME ? multerS3({
-  s3: new S3Client({ region: process.env.AWS_REGION || process.env.aws_region || 'ap-southeast-2' }),
-  bucket: process.env.S3_BUCKET_NAME,
-  contentType: multerS3.AUTO_CONTENT_TYPE,
-  key: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'uploads/' + uniqueSuffix + path.extname(file.originalname));
+let s3Client = null;
+let s3Storage = null;
+
+if (process.env.USE_S3 === 'true' && process.env.S3_BUCKET_NAME) {
+  try {
+    s3Client = new S3Client({
+      region: process.env.AWS_REGION || process.env.aws_region || 'ap-southeast-2',
+      // Max retries for better robustness
+      maxAttempts: 3
+    });
+
+    s3Storage = multerS3({
+      s3: s3Client,
+      bucket: process.env.S3_BUCKET_NAME,
+      contentType: multerS3.AUTO_CONTENT_TYPE,
+      key: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'uploads/' + uniqueSuffix + path.extname(file.originalname));
+      }
+    });
+    console.log(`S3 Storage Engine initialized for bucket: ${process.env.S3_BUCKET_NAME}`);
+  } catch (err) {
+    console.error('Failed to initialize S3 storage engine:', err);
   }
-}) : null;
+}
 
-// Use S3 storage if configured, otherwise fallback to disk
-const storage = s3Storage || diskStorage;
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+// Initial upload instance (can be updated dynamically)
+let currentUpload = multer({
+  storage: s3Storage || diskStorage,
+  limits: { fileSize: 20 * 1024 * 1024 } // Increased to 20MB
 });
+
+// Helper to switch storage mode dynamically
+function setStorageMode(mode) {
+  if (mode === 'local') {
+    console.log('⚠️ SWITCHING TO LOCAL STORAGE FALLBACK');
+    currentUpload = multer({
+      storage: diskStorage,
+      limits: { fileSize: 20 * 1024 * 1024 }
+    });
+  }
+}
 
 // Middleware
 app.use(cors({
@@ -63,15 +95,24 @@ app.use(express.json());
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(uploadsDir));
+app.use('/api/uploads', express.static(uploadsDir));
 
 async function start() {
   // Initialize DB schema in Postgres
   await initSchema();
   console.log('Postgres schema initialized successfully');
 
-  // Log Storage Mode
+  // Log Storage Mode & Verify S3
   if (process.env.USE_S3 === 'true' && process.env.S3_BUCKET_NAME) {
-    console.log(`Storage Mode: S3 (Bucket: ${process.env.S3_BUCKET_NAME})`);
+    const { HeadBucketCommand } = require('@aws-sdk/client-s3');
+    try {
+      await s3Client.send(new HeadBucketCommand({ Bucket: process.env.S3_BUCKET_NAME }));
+      console.log(`✅ Storage Mode: S3 (Bucket: ${process.env.S3_BUCKET_NAME}) is accessible`);
+    } catch (err) {
+      console.error(`❌ S3 Bucket Error (${process.env.S3_BUCKET_NAME}):`, err.name);
+      console.log('Falling back to local storage for this session...');
+      setStorageMode('local');
+    }
   } else {
     console.log('Storage Mode: Local Disk (Warning: Files are ephemeral in App Runner)');
   }
@@ -85,6 +126,66 @@ async function start() {
       res.json({ status: 'ok', time: new Date().toISOString() });
     } catch (error) {
       res.status(500).json({ status: 'error', error: error.message });
+    }
+  });
+
+  // Proxy to serve files from local disk or S3
+  app.get('/api/uploads/:filename', async (req, res) => {
+    try {
+      const { filename } = req.params;
+      console.log(`[Proxy] Request for file: ${filename}`);
+
+      const localPath = path.join(uploadsDir, filename);
+
+      // 1. Try Local Disk First
+      if (fs.existsSync(localPath)) {
+        console.log(`[Proxy] Serving local file: ${localPath}`);
+        return res.sendFile(localPath);
+      }
+
+      // 2. Try S3 if enabled
+      if (process.env.USE_S3 === 'true' && s3Client) {
+        try {
+          // Reconstruct S3 Key (ensure it has the 'uploads/' prefix)
+          const key = filename.startsWith('uploads/') ? filename : `uploads/${filename}`;
+          console.log(`[Proxy] Fetching from S3: ${process.env.S3_BUCKET_NAME} / ${key}`);
+
+          const data = await s3Client.send(new GetObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: key
+          }));
+
+          // Set appropriate headers
+          if (data.ContentType) {
+            res.setHeader('Content-Type', data.ContentType);
+          } else {
+            // Fallback content types based on extension
+            const ext = path.extname(filename).toLowerCase();
+            const types = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+            if (types[ext]) res.setHeader('Content-Type', types[ext]);
+          }
+
+          res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+          res.setHeader('Cache-Control', 'public, max-age=31536000');
+
+          // AWS SDK v3 Body is a stream in Node.js
+          data.Body.on('error', (err) => {
+            console.error('[Proxy] Stream Error:', err);
+            if (!res.headersSent) res.status(500).send('Stream error');
+          });
+
+          data.Body.pipe(res);
+        } catch (err) {
+          console.error(`[Proxy] S3 Error for ${filename}:`, err.message);
+          res.status(404).json({ error: 'File not found on S3' });
+        }
+      } else {
+        console.log(`[Proxy] File not found and S3 disabled: ${filename}`);
+        res.status(404).json({ error: 'File not found' });
+      }
+    } catch (err) {
+      console.error('[Proxy] Global Error:', err);
+      res.status(500).json({ error: 'Internal proxy error' });
     }
   });
 
@@ -699,8 +800,23 @@ async function start() {
     }
   });
 
-  // ============ FILE UPLOAD ============
-  app.post('/api/upload', upload.single('file'), (req, res) => {
+  app.post('/api/upload', (req, res, next) => {
+    currentUpload.single('file')(req, res, (err) => {
+      if (err) {
+        console.error('Upload Error:', err);
+        // If S3 fails, try to fall back to local disk for the NEXT request
+        if (err.name === 'NoSuchBucket' || err.code === 'NoSuchBucket') {
+          setStorageMode('local');
+        }
+        return res.status(500).json({
+          error: 'Upload Failed',
+          message: err.message,
+          code: err.code || err.name
+        });
+      }
+      next();
+    });
+  }, (req, res) => {
     try {
       if (process.env.NODE_ENV !== 'production') {
         console.log('Upload endpoint hit');
@@ -715,18 +831,71 @@ async function start() {
       const response = {
         filename: req.file.key || req.file.filename,
         originalName: req.file.originalname,
-        path: req.file.location || `/uploads/${req.file.filename}`
+        path: `/api/uploads/${req.file.key ? req.file.key.replace('uploads/', '') : req.file.filename}`
       };
       console.log('Upload successful:', response);
       res.json(response);
     } catch (error) {
-      console.error('File upload error:', error);
+      console.error('File upload process error:', error);
+      res.status(500).json({ error: 'Process error: ' + error.message });
+    }
+  });
+
+  // Physical file deletion endpoint
+  app.post('/api/upload/delete', async (req, res) => {
+    try {
+      const { filePath } = req.body;
+      if (!filePath) return res.status(400).json({ error: 'No file path provided' });
+
+      console.log('Attempting to physically delete file:', filePath);
+
+      // 1. Handle S3 deletion (Supports both full S3 URLs and proxied paths)
+      const isS3 = (filePath.startsWith('http') && filePath.includes('s3.amazonaws.com')) ||
+        (process.env.USE_S3 === 'true' && filePath.includes('/api/uploads/'));
+
+      if (isS3) {
+        try {
+          let key = '';
+          if (filePath.startsWith('http')) {
+            const url = new URL(filePath);
+            key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+          } else {
+            // Proxied path like /api/uploads/filename
+            const filename = filePath.split('/').pop();
+            key = `uploads/${filename}`;
+          }
+
+          await s3Client.send(new DeleteObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: key
+          }));
+          console.log('✅ S3 File physically deleted:', key);
+        } catch (err) {
+          console.error('❌ S3 Delete Error:', err.message);
+        }
+      }
+
+      // 2. Handle Local deletion (Check even if S3 was attempted, for safety)
+      const fileName = filePath.split('/').pop();
+      const fullPath = path.join(uploadsDir, fileName);
+      if (fs.existsSync(fullPath)) {
+        try {
+          fs.unlinkSync(fullPath);
+          console.log('✅ Local File physically deleted:', fullPath);
+        } catch (err) {
+          console.error('❌ Local Delete Error:', err.message);
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('General Delete API error:', error);
       res.status(500).json({ error: error.message });
     }
   });
 
   // Multiple file upload endpoint
-  app.post('/api/upload-multiple', upload.array('files', 10), (req, res) => {
+  app.post('/api/upload-multiple', currentUpload.array('files', 10), (req, res) => {
     try {
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: 'No files uploaded' });
@@ -734,7 +903,7 @@ async function start() {
       const files = req.files.map(file => ({
         filename: file.key || file.filename,
         originalName: file.originalname,
-        path: file.location || `/uploads/${file.filename}`
+        path: `/api/uploads/${file.key ? file.key.replace('uploads/', '') : file.filename}`
       }));
       res.json({ files });
     } catch (error) {
@@ -875,8 +1044,22 @@ async function start() {
   io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
 
-    socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+    socket.on('error', (error) => {
+      console.error('Socket error for client', socket.id, ':', error);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('Client disconnected:', socket.id, 'Reason:', reason);
+    });
+  });
+
+  // Global Error Handler for Express
+  app.use((err, req, res, next) => {
+    console.error('GLOBAL ERROR:', err);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.message,
+      stack: process.env.NODE_ENV === 'production' ? '🥞' : err.stack
     });
   });
 

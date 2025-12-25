@@ -11,7 +11,6 @@ const ClockNotch = () => {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [indiaAnalog, setIndiaAnalog] = useState({ h: 0, m: 0, s: 0 });
     const [uaeAnalog, setUaeAnalog] = useState({ h: 0, m: 0, s: 0 });
-    const [leftPosition, setLeftPosition] = useState<string>('50%');
     const { logout, user } = useAuth();
     const { isServerOnline } = useData();
     const navigate = useNavigate();
@@ -47,49 +46,7 @@ const ClockNotch = () => {
 
 
 
-    useEffect(() => {
-        const calculateCenter = () => {
-            // Find the main element (the flex-1 main content area)
-            const mainElement = document.querySelector('main.flex-1');
-            if (mainElement) {
-                const mainRect = mainElement.getBoundingClientRect();
-
-                // Calculate the center point of the main content area
-                // Since we use translateX(-50%), the left position should be the center point
-                const centerX = mainRect.left + (mainRect.width / 2);
-                const newPosition = `${centerX}px`;
-                setLeftPosition(newPosition);
-            }
-        };
-
-        // Calculate on mount and resize
-        calculateCenter();
-        window.addEventListener('resize', calculateCenter);
-
-        // Also recalculate after a short delay to ensure layout is complete
-        const timeoutId = setTimeout(() => {
-            calculateCenter();
-        }, 100);
-
-        // Use ResizeObserver for more accurate updates
-        const mainElement = document.querySelector('main.flex-1');
-        let resizeObserver: ResizeObserver | null = null;
-
-        if (mainElement && 'ResizeObserver' in window) {
-            resizeObserver = new ResizeObserver(() => {
-                calculateCenter();
-            });
-            resizeObserver.observe(mainElement);
-        }
-
-        return () => {
-            window.removeEventListener('resize', calculateCenter);
-            clearTimeout(timeoutId);
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-            }
-        };
-    }, []);
+    // Layout effect removed as centering is now handled by TitleBar flex container
 
     const handleLogout = () => {
         logout();
@@ -151,26 +108,26 @@ const ClockNotch = () => {
     };
 
     return (
-        <>
-            {/* Minimal Top Notch */}
+        <div className="relative h-full flex items-center justify-center">
+            {/* Minimal Top Notch - Now relative to its parent (TitleBar) */}
             <motion.div
                 ref={notchRef}
-                className="fixed top-0 z-50"
+                className="pointer-events-auto h-full flex items-center"
                 style={{
-                    left: leftPosition,
-                    WebkitAppRegion: 'drag',
+                    WebkitAppRegion: 'no-drag',
                 } as any}
-                initial={{ y: -50, x: '-50%' }}
-                animate={{ y: 0, x: '-50%' }}
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
                 <div
-                    className="text-white px-4 py-1.5 rounded-b-2xl flex items-center gap-3 text-xs"
+                    className="text-white px-4 h-[30px] rounded-b-2xl flex items-center gap-3 text-xs shadow-xl"
                     style={{
                         background: 'linear-gradient(180deg, #5D4037 0%, #3E2723 100%)',
-                        boxShadow: '0 4px 20px -5px rgba(93, 64, 55, 0.5)',
+                        boxShadow: '0 4px 15px -5px rgba(0, 0, 0, 0.4)',
                         borderBottom: '1px solid rgba(218, 165, 32, 0.3)',
-                        WebkitAppRegion: 'no-drag',
+                        borderLeft: '1px solid rgba(218, 165, 32, 0.1)',
+                        borderRight: '1px solid rgba(218, 165, 32, 0.1)',
                     } as any}
                 >
                     {/* Online Status + Refresh Button */}
@@ -239,21 +196,23 @@ const ClockNotch = () => {
                     <div className="w-px h-3" style={{ background: 'rgba(218, 165, 32, 0.4)' }} />
 
                     {/* User & Logout */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-medium truncate max-w-[80px]" style={{ color: '#DAA520' }} title={user?.name}>
-                            {user?.name || 'User'}
-                        </span>
-                        <motion.button
-                            onClick={handleLogout}
-                            className="transition-colors flex items-center gap-1"
-                            style={{ color: '#A1887F' }}
-                            whileHover={{ color: '#ef5350', scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            title="Logout"
-                        >
-                            <LogOut size={14} />
-                        </motion.button>
-                    </div>
+                    {user && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-medium truncate max-w-[80px]" style={{ color: '#DAA520' }} title={user?.name}>
+                                {user?.name || 'User'}
+                            </span>
+                            <motion.button
+                                onClick={handleLogout}
+                                className="transition-colors flex items-center gap-1"
+                                style={{ color: '#A1887F' }}
+                                whileHover={{ color: '#ef5350', scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                title="Logout"
+                            >
+                                <LogOut size={14} />
+                            </motion.button>
+                        </div>
+                    )}
                 </div>
             </motion.div>
 
@@ -289,7 +248,7 @@ const ClockNotch = () => {
                     </>
                 )}
             </AnimatePresence>
-        </>
+        </div>
     );
 };
 
