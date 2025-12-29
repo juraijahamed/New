@@ -558,6 +558,17 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                         </div>
                     </div>
 
+                    <div>
+                        <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Total Salary Amount (AED)</label>
+                        <input
+                            type="text"
+                            value={((parseFloat(salaryData.amount) || 0) - ((parseFloat(salaryData.advance) || 0))).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            readOnly
+                            className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none font-mono text-green-700"
+                            style={inputStyle}
+                        />
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Paid Month</label>
@@ -605,39 +616,32 @@ const ExpenseModal: React.FC<ExpenseModalProps> = ({ isOpen, onClose, expense })
                     {/* Payment Proof Upload */}
                     <div>
                         <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Payment Proof (Optional)</label>
-                        <div className="flex items-center gap-3">
-                            <label className="flex-1 cursor-pointer">
-                                <div 
-                                    className="border-2 border-dashed border-amber-300 bg-amber-50/30 rounded-xl p-4 text-center transition-colors hover:border-amber-400 hover:bg-amber-50 flex flex-col items-center justify-center"
-                                    style={{ minHeight: '100px' }}
-                                >
-                                    <Upload size={24} className="text-amber-600 mb-2" />
-                                    <p className="text-sm text-amber-700">
-                                        {selectedSalaryFile ? selectedSalaryFile.name : 'Click to upload payment proof'}
-                                    </p>
-                                    <p className="text-xs text-amber-600 mt-1">PDF, JPG, PNG (Max 10MB)</p>
-                                </div>
+                        <div className="flex items-center gap-2">
+                            <label
+                                className="flex-1 flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed rounded-xl cursor-pointer transition-all"
+                                style={{ borderColor: '#e8ddd0', background: '#fdf9f3' }}
+                            >
+                                <Upload size={16} style={{ color: '#A1887F' }} />
+                                <span className="text-sm" style={{ color: '#8D6E63' }}>
+                                    {salaryData.receipt_url || (selectedSalaryFile ? selectedSalaryFile.name : 'Click to upload payment proof')}
+                                </span>
                                 <input
                                     type="file"
                                     className="hidden"
-                                    accept="application/pdf,image/*"
-                                    onChange={(e) => handleSalaryFileChange(e)}
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    onChange={handleSalaryFileChange}
                                 />
                             </label>
-                            {selectedSalaryFile && (
+                            {(salaryData.receipt_url || selectedSalaryFile) && (
                                 <button
                                     type="button"
-                                    onClick={clearSalaryFile}
-                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Remove file"
+                                    onClick={() => { clearSalaryFile(); }}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
                                 >
-                                    <X size={20} />
+                                    <X size={16} />
                                 </button>
                             )}
                         </div>
-                        {salaryData.receipt_url && !selectedSalaryFile && (
-                            <p className="text-xs text-gray-500 mt-1">Current: {salaryData.receipt_url}</p>
-                        )}
                     </div>
 
                     <div className="sticky bottom-0 bg-white pt-4 mt-4 pb-1" style={{ borderTop: '1px solid rgba(218, 165, 32, 0.15)', zIndex: 10 }}>

@@ -17,7 +17,12 @@ export const SuggestionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Extract unique suppliers from all sources
         const supplierSet = new Set<string>();
 
-        sales.forEach(s => s.supplier && supplierSet.add(s.supplier.trim()));
+        sales.forEach(s => {
+            if (s.supplier) supplierSet.add(s.supplier.trim());
+            if (s.bus_supplier) supplierSet.add(s.bus_supplier.trim());
+            if (s.visa_supplier) supplierSet.add(s.visa_supplier.trim());
+            if (s.ticket_supplier) supplierSet.add(s.ticket_supplier.trim());
+        });
         supplierPayments.forEach(sp => sp.supplier_name && supplierSet.add(sp.supplier_name.trim()));
 
         const suppliers = Array.from(supplierSet).filter(Boolean).sort();

@@ -133,13 +133,11 @@ async function start() {
   app.get('/api/uploads/:filename', async (req, res) => {
     try {
       const { filename } = req.params;
-      console.log(`[Proxy] Request for file: ${filename}`);
 
       const localPath = path.join(uploadsDir, filename);
 
       // 1. Try Local Disk First
       if (fs.existsSync(localPath)) {
-        console.log(`[Proxy] Serving local file: ${localPath}`);
         return res.sendFile(localPath);
       }
 
@@ -148,7 +146,6 @@ async function start() {
         try {
           // Reconstruct S3 Key (ensure it has the 'uploads/' prefix)
           const key = filename.startsWith('uploads/') ? filename : `uploads/${filename}`;
-          console.log(`[Proxy] Fetching from S3: ${process.env.S3_BUCKET_NAME} / ${key}`);
 
           const data = await s3Client.send(new GetObjectCommand({
             Bucket: process.env.S3_BUCKET_NAME,
@@ -180,7 +177,6 @@ async function start() {
           res.status(404).json({ error: 'File not found on S3' });
         }
       } else {
-        console.log(`[Proxy] File not found and S3 disabled: ${filename}`);
         res.status(404).json({ error: 'File not found' });
       }
     } catch (err) {
@@ -198,7 +194,8 @@ async function start() {
 
     try {
       const trimmedName = name.trim();
-      const existing = await pool.query('SELECT * FROM users WHERE name = $1', [trimmedName]);
+      // Case-insensitive lookup
+      const existing = await pool.query('SELECT * FROM users WHERE LOWER(name) = LOWER($1)', [trimmedName]);
       let user = existing.rows[0];
 
       if (!user) {
@@ -344,7 +341,28 @@ async function start() {
     try {
       const result = await pool.query(`
       SELECT 
-        s.*,
+        s.id,
+        s.date,
+        s.agency,
+        s.client,
+        s.supplier,
+        s.national,
+        s.passport_number,
+        s.service,
+        s.net_rate,
+        s.sales_rate,
+        s.profit,
+        s.documents,
+        s.remarks,
+        s.status,
+        s.user_id,
+        s.bus_supplier,
+        s.visa_supplier,
+        s.ticket_supplier,
+        s.created_at,
+        s.updated_at,
+        s.created_by_user_id,
+        s.updated_by_user_id,
         u1.name as created_by,
         u2.name as updated_by
       FROM sales s
@@ -360,17 +378,18 @@ async function start() {
   });
 
   app.post('/api/sales', async (req, res) => {
-    const { date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id } = req.body;
+    const { date, agency, client, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, bus_supplier, visa_supplier, ticket_supplier } = req.body;
     try {
       const calculatedProfit = profit !== undefined ? profit : (sales_rate || 0) - (net_rate || 0);
       const inserted = await pool.query(
-        `INSERT INTO sales (date, agency, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, created_by_user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        `INSERT INTO sales (date, agency, client, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, created_by_user_id, bus_supplier, visa_supplier, ticket_supplier)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING *`,
         [
           date,
           agency,
-          supplier,
+          client || '',
+          supplier || '',
           national,
           passport_number || null,
           service,
@@ -382,6 +401,9 @@ async function start() {
           status || '',
           user_id || null,
           user_id || null,
+          bus_supplier || '',
+          visa_supplier || '',
+          ticket_supplier || '',
         ]
       );
       // Fetch with user names
@@ -409,7 +431,7 @@ async function start() {
     const { id } = req.params;
     const updates = req.body;
     const { user_id, ...updateFields } = updates;
-    const validFields = ['date', 'agency', 'supplier', 'national', 'passport_number', 'service', 'net_rate', 'sales_rate', 'profit', 'documents', 'remarks', 'status'];
+    const validFields = ['date', 'agency', 'client', 'supplier', 'national', 'passport_number', 'service', 'net_rate', 'sales_rate', 'profit', 'documents', 'remarks', 'status', 'bus_supplier', 'visa_supplier', 'ticket_supplier'];
 
     try {
       // specific calculations if rates are updated
@@ -439,6 +461,11 @@ async function start() {
         if (field === 'remarks') return (updateFields[field] && updateFields[field].trim()) || null;
         if (field === 'documents') return updateFields[field] || null;
         if (field === 'passport_number') return updateFields[field] || null;
+        // Convert null to empty string for new fields to ensure they display properly
+        if (field === 'client') return updateFields[field] || '';
+        if (field === 'bus_supplier') return updateFields[field] || '';
+        if (field === 'visa_supplier') return updateFields[field] || '';
+        if (field === 'ticket_supplier') return updateFields[field] || '';
         return updateFields[field];
       });
 
@@ -560,6 +587,28 @@ async function start() {
       res.json(result.rows);
     } catch (error) {
       console.error('Get supplier payments error:', error);
+      // Auto-recover if table was dropped
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "supplier_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          const result = await pool.query(`
+            SELECT 
+              sp.*,
+              u1.name as created_by,
+              u2.name as updated_by
+            FROM supplier_payments sp
+            LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+            LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+            ORDER BY COALESCE(sp.updated_at, sp.created_at) DESC, sp.date DESC
+          `);
+          return res.json(result.rows);
+        } catch (recoverErr) {
+          console.error('Recovery failed (supplier_payments GET):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
       res.status(500).json({ error: error.message });
     }
   });
@@ -590,6 +639,35 @@ async function start() {
       res.json(newPayment);
     } catch (error) {
       console.error('Add supplier payment error:', error);
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "supplier_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          const inserted = await pool.query(
+            `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           RETURNING *`,
+            [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null]
+          );
+          const withNames = await pool.query(`
+            SELECT 
+              sp.*,
+              u1.name as created_by,
+              u2.name as updated_by
+            FROM supplier_payments sp
+            LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+            LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+            WHERE sp.id = $1
+          `, [inserted.rows[0].id]);
+          const newPayment = withNames.rows[0];
+          io.emit('supplier_payment:created', newPayment);
+          return res.json(newPayment);
+        } catch (recoverErr) {
+          console.error('Recovery failed (supplier_payments POST):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
       res.status(500).json({ error: error.message });
     }
   });
@@ -649,6 +727,17 @@ async function start() {
       res.json(updatedPayment);
     } catch (error) {
       console.error('Update supplier payment error:', error);
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "supplier_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          return res.json({ id: Number(id), ...updates });
+        } catch (recoverErr) {
+          console.error('Recovery failed (supplier_payments PUT):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
       res.status(500).json({ error: error.message });
     }
   });
@@ -662,6 +751,18 @@ async function start() {
       res.json({ success: true });
     } catch (error) {
       console.error('Delete supplier payment error:', error);
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "supplier_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          // If table was missing, return success since the target row can't exist
+          return res.json({ success: true });
+        } catch (recoverErr) {
+          console.error('Recovery failed (supplier_payments DELETE):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
       res.status(500).json({ error: error.message });
     }
   });
@@ -690,14 +791,15 @@ async function start() {
     const { staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id } = req.body;
     try {
       const inserted = await pool.query(
-        `INSERT INTO salary_payments (staff_id, staff_name, amount, advance, paid_month, date, receipt_url, remarks, status, user_id, created_by_user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        `INSERT INTO salary_payments (staff_id, staff_name, amount, advance, total_amount, paid_month, date, receipt_url, remarks, status, user_id, created_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
         [
           staff_id,
           staff_name,
           amount,
           advance || 0,
+          (Number(amount) || 0) - (Number(advance) || 0),
           paid_month,
           date,
           receipt_url || null,
@@ -755,6 +857,10 @@ async function start() {
         setClause += `updated_by_user_id = $${values.length + 1}`;
         values.push(user_id);
       }
+      // Keep total_amount consistent if amount/advance change
+      if (setClause) setClause += ', ';
+      setClause += `total_amount = COALESCE(amount, 0) - COALESCE(advance, 0)`;
+
       // Always update updated_at when any field is updated
       if (setClause) setClause += ', ';
       setClause += `updated_at = NOW()`;
@@ -858,7 +964,19 @@ async function start() {
           let key = '';
           if (filePath.startsWith('http')) {
             const url = new URL(filePath);
-            key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+            const pathname = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+            if (pathname.startsWith('api/uploads/')) {
+              // Convert proxied URL path to S3 key
+              const filename = pathname.split('/').pop();
+              key = `uploads/${filename}`;
+            } else if (pathname.startsWith('uploads/')) {
+              // Direct S3 object path
+              key = pathname;
+            } else {
+              // Fallback: use last segment as filename
+              const filename = pathname.split('/').pop();
+              key = `uploads/${filename}`;
+            }
           } else {
             // Proxied path like /api/uploads/filename
             const filename = filePath.split('/').pop();
@@ -919,9 +1037,9 @@ async function start() {
       const expensesData = (await pool.query('SELECT SUM(amount) as total, COUNT(*) as count FROM expenses')).rows[0];
       const salaryData = (await pool.query('SELECT SUM(amount) as total, COUNT(*) as count FROM salary_payments')).rows[0];
 
-      const totalSales = salesData?.total || 0;
-      const totalProfit = salesData?.totalProfit || 0;
-      const salesCount = salesData?.count || 0;
+      const totalSales = Number(salesData?.total) || 0;
+      const totalProfit = Number(salesData?.totalProfit) || 0;
+      const salesCount = Number(salesData?.count) || 0;
       const totalExpenses = (Number(expensesData?.total) || 0) + (Number(salaryData?.total) || 0);
       const expensesCount = (Number(expensesData?.count) || 0) + (Number(salaryData?.count) || 0);
       const netProfit = totalProfit - totalExpenses;

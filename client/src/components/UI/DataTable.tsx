@@ -17,7 +17,7 @@ interface DataTableProps<TData> {
     } | null;
 }
 
-export function DataTable<TData>({ columns, data, compact = false, highlightInfo }: DataTableProps<TData>) {
+export function DataTable<TData>({ columns, data, compact = false, highlightInfo, onEdit }: DataTableProps<TData>) {
     const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
     const [copiedCell, setCopiedCell] = useState<{ row: number; col: number } | null>(null);
 
@@ -92,6 +92,7 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
         data,
         columns,
         getCoreRowModel: getCoreRowModel(),
+        columnResizeMode: 'onChange', // Enable column resizing
     });
 
     // Virtualization Calculations
@@ -187,21 +188,22 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
             className="w-full h-full overflow-auto relative"
             onScroll={handleScroll}
         >
-            <table className="w-full border-collapse" style={{ fontFamily: "'Segoe UI', Calibri, Arial, sans-serif", tableLayout: 'auto' }}>
+            <table className="w-full border-collapse" style={{ fontFamily: "'Segoe UI', Calibri, Arial, sans-serif", tableLayout: 'fixed' }}>
                 <thead className="sticky top-0 z-10 shadow-sm">
                     {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
                             {headerGroup.headers.map((header, colIndex) => (
                                 <th
                                     key={header.id}
-                                    className={`text-xs font-semibold text-left whitespace-nowrap ${compact ? 'px-2 py-1.5' : 'px-3 py-2.5'}`}
+                                    className={`text-xs font-semibold text-left whitespace-nowrap ${compact ? 'px-1 py-0.5' : 'px-1.5 py-1'}`}
                                     style={{
                                         background: 'var(--table-header-bg)',
                                         color: 'var(--table-header-text)',
                                         borderRight: colIndex < headerGroup.headers.length - 1 ? '1px solid var(--table-header-border)' : 'none',
                                         borderBottom: '1px solid rgba(0,0,0,0.1)',
                                         boxShadow: 'inset 0 -2px 0 rgba(218, 165, 32, 0.9)',
-                                        minWidth: colIndex === 0 ? '40px' : '100px'
+                                        width: header.column.columnDef.size ? `${header.column.columnDef.size}px` : 'auto',
+                                        minWidth: header.column.columnDef.size ? `${header.column.columnDef.size}px` : 'auto',
                                     }}
                                 >
                                     {header.isPlaceholder
@@ -247,6 +249,8 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
                                     const isSelected = selectedCell?.row === rowIndex && selectedCell?.col === colIndex;
                                     const isCopied = copiedCell?.row === rowIndex && copiedCell?.col === colIndex;
 
+                                    const isIdColumn = (cell.column.columnDef as any)?.accessorKey === 'id' ||
+                                        String((cell.column.columnDef as any)?.header).toLowerCase() === 'id';
                                     return (
                                         <td
                                             key={cell.id}
@@ -272,7 +276,13 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
                                                 // Handle cell selection
                                                 handleCellClick(rowIndex, colIndex);
                                             }}
-                                            className={`text-xs transition-all relative ${compact ? 'px-2 py-1' : 'px-3 py-2'}`}
+                                            onDoubleClick={() => {
+                                                if (onEdit && isIdColumn) {
+                                                    const original = (row as any).original as TData;
+                                                    onEdit(original);
+                                                }
+                                            }}
+                                            className={`text-xs transition-all relative ${compact ? 'px-1 py-0' : 'px-1.5 py-0.5'}`}
                                             style={{
                                                 borderRight: '1px solid #e0d5c7',
                                                 borderBottom: '1px solid #e0d5c7',
@@ -286,7 +296,8 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
                                                 position: 'relative', // Ensure absolute children are positioned relative to this cell
                                                 overflow: 'hidden', // Prevent content from expanding cell
                                                 minWidth: 0, // Allow cell to shrink if needed
-                                                height: 'inherit' // Ensure cell takes row height
+                                                height: 'inherit', // Ensure cell takes row height
+                                                width: cell.column.getSize() ? `${cell.column.getSize()}px` : 'auto',
                                             }}
                                         >
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}

@@ -124,7 +124,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
                 onWheel={handleWheel}
-                className={`px-2 py-1 border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${className}`}
+                className={`px-1 py-0.5 border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${className}`}
                 style={{
                     fontSize: 'inherit',
                     fontFamily: 'inherit',
@@ -157,7 +157,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
                 // Don't stop propagation - let single clicks bubble up to td for cell selection
                 // Only double-click will trigger editing
             }}
-            className={`absolute inset-0 cursor-cell transition-colors flex items-center justify-start px-3 py-2 group ${className}`}
+            className={`absolute inset-0 cursor-cell transition-colors flex items-center justify-start px-1.5 py-1 group ${className}`}
             title="Double-click to edit"
             style={{
                 top: 0,

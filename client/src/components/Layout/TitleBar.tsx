@@ -90,19 +90,14 @@ const TitleBar = () => {
                 }}
             />
 
-            {/* Center Area with ClockNotch */}
+            {/* Spacer for Dragging */}
             <div
-                className="flex justify-center items-center"
                 style={{
                     flex: 1,
                     height: "100%",
                     WebkitAppRegion: "drag",
                 } as any}
-            >
-                <div style={{ WebkitAppRegion: "no-drag" } as any}>
-                    <ClockNotch />
-                </div>
-            </div>
+            />
 
             <div
                 className="flex items-center h-full gap-2"
@@ -132,6 +127,19 @@ const TitleBar = () => {
                         <X size={11} />
                     </TitleButton>
                 </div>
+            </div>
+
+            {/* Center Area with ClockNotch - Absolutely Centered & On Top */}
+            <div
+                className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2"
+                style={{
+                    height: "100%",
+                    WebkitAppRegion: "no-drag",
+                    zIndex: 50,
+                    pointerEvents: "auto",
+                } as any}
+            >
+                <ClockNotch />
             </div>
         </div>
     );

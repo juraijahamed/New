@@ -58,6 +58,7 @@ export interface Sale {
     id?: number;
     date: string;
     agency: string;
+    client: string;
     supplier: string;
     national: string;
     service: string;
@@ -73,6 +74,9 @@ export interface Sale {
     updated_by?: string;
     created_at?: string;
     updated_at?: string;
+    bus_supplier?: string;
+    visa_supplier?: string;
+    ticket_supplier?: string;
 }
 
 export const salesApi = {
@@ -161,6 +165,7 @@ export interface SalaryPayment {
     staff_name: string;
     amount: number;
     advance: number;
+    total_amount?: number;
     paid_month: string;
     date: string;
     receipt_url?: string;

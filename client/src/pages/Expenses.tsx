@@ -263,6 +263,18 @@ const Expenses = () => {
                 ),
             },
             {
+                accessorKey: 'total_salary',
+                header: 'Total (AED)',
+                cell: ({ row }) => {
+                    const total = (row.original.total_amount ?? ((row.original.amount || 0) - ((row.original.advance || 0))));
+                    return (
+                        <div className="font-mono text-green-700 text-xs">
+                            {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </div>
+                    );
+                },
+            },
+            {
                 accessorKey: 'receipt_url',
                 header: 'Payment Proof',
                 cell: ({ row }) => (

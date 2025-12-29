@@ -30,8 +30,24 @@ const Reports = () => {
 
     const [isExporting, setIsExporting] = useState(false);
 
-    // Placeholder for MoM growth (would need historical data)
-    const momGrowth = '+12';
+    const getPrevMonthYear = (month: number, year: number) => {
+        if (month === 0) return { month: 11, year: year - 1 };
+        return { month: month - 1, year };
+    };
+    const { month: prevMonth, year: prevYear } = getPrevMonthYear(selectedMonth, selectedYear);
+    const prevMonthSales = sales.filter((s) => {
+        const d = new Date(s.date);
+        return d.getMonth() === prevMonth && d.getFullYear() === prevYear;
+    });
+    const prevTotalSales = prevMonthSales.reduce((sum, s) => sum + (s.sales_rate || 0), 0);
+    const momGrowth = (() => {
+        if (prevTotalSales === 0) {
+            return totalSales === 0 ? '0' : '+100';
+        }
+        const delta = ((totalSales - prevTotalSales) / prevTotalSales) * 100;
+        const rounded = Math.round(delta);
+        return `${rounded >= 0 ? '+' : ''}${rounded}`;
+    })();
 
     const reportRef = useRef<HTMLDivElement>(null);
     const months = [

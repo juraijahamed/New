@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, BarChart3 } from 'lucide-react';
+import { PlusCircle, Loader2, BarChart3, LayoutList, FileText } from 'lucide-react';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
 import { useData } from '../context/DataContext';
 import SaleModal from '../components/Modals/SaleModal';
@@ -10,6 +10,7 @@ import { EditableCell } from '../components/UI/EditableCell';
 import { DocumentCell } from '../components/UI/DocumentCell';
 import { useSearchParams } from 'react-router-dom';
 import { fileUploadApi, type Sale } from '../services/api';
+import MonthlyStatement from '../components/Reports/MonthlyStatement';
 
 import config from '../config';
 
@@ -18,6 +19,7 @@ const Sales = () => {
     const [searchParams] = useSearchParams();
     const highlightId = searchParams.get('highlightId');
     const highlightKey = searchParams.get('highlightKey');
+    const [activeTab, setActiveTab] = useState<'transactions' | 'statement'>('transactions');
 
     // Strict ID Ascending sort for a cleaner "series" view (1, 2, 3...)
     const sortedSales = useMemo(() => {
@@ -40,9 +42,10 @@ const Sales = () => {
             {
                 accessorKey: 'id',
                 header: 'ID',
+                size: 60,
                 cell: ({ row }) => (
                     <div
-                        className="absolute inset-0 flex items-center justify-start px-3 py-2 font-mono text-xs text-gray-500 cursor-cell hover:bg-black/[0.02] transition-colors"
+                        className="absolute inset-0 flex items-center justify-start px-1.5 py-1 font-mono text-xs text-gray-500 cursor-cell hover:bg-black/[0.02] transition-colors"
                         onDoubleClick={(e) => {
                             e.stopPropagation();
                             handleEdit(row.original);
@@ -56,6 +59,7 @@ const Sales = () => {
             {
                 accessorKey: 'date',
                 header: 'Date',
+                size: 100,
                 cell: ({ row }) => (
                     <EditableCell
                         value={row.original.date}
@@ -70,7 +74,8 @@ const Sales = () => {
             },
             {
                 accessorKey: 'agency',
-                header: 'Client/Agency',
+                header: 'Agency',
+                size: 100,
                 cell: ({ row }) => (
                     <EditableCell
                         value={row.original.agency}
@@ -82,13 +87,68 @@ const Sales = () => {
                 ),
             },
             {
-                accessorKey: 'supplier',
-                header: 'Supplier',
+                accessorKey: 'client',
+                header: 'Client',
+                size: 100,
                 cell: ({ row }) => (
                     <EditableCell
-                        value={row.original.supplier}
+                        value={row.original.client}
                         onSave={async (val) => {
-                            await updateSale(row.original.id!, { supplier: val as string });
+                            await updateSale(row.original.id!, { client: val as string });
+                        }}
+                        className="font-semibold text-gray-700 text-xs"
+                    />
+                ),
+            },
+            {
+                accessorKey: 'service',
+                header: 'Service',
+                size: 100,
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.service}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { service: val as string });
+                        }}
+                        className="text-gray-700 text-xs"
+                    />
+                ),
+            },
+            {
+                accessorKey: 'bus_ticket_supplier',
+                header: 'Bus/Ticket Supplier',
+                size: 110,
+                cell: ({ row }) => {
+                    const busSupplier = row.original.bus_supplier || '';
+                    const ticketSupplier = row.original.ticket_supplier || '';
+                    const displayValue = busSupplier || ticketSupplier || '';
+                    
+                    return (
+                        <EditableCell
+                            value={displayValue}
+                            onSave={async (val) => {
+                                // Determine which field to update based on service type
+                                const service = row.original.service;
+                                if (service === 'B2B') {
+                                    await updateSale(row.original.id!, { bus_supplier: val as string });
+                                } else if (service === 'A2A') {
+                                    await updateSale(row.original.id!, { ticket_supplier: val as string });
+                                }
+                            }}
+                            className="text-gray-600 text-xs"
+                        />
+                    );
+                },
+            },
+            {
+                accessorKey: 'visa_supplier',
+                header: 'Visa Supplier',
+                size: 90,
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.visa_supplier || ''}
+                        onSave={async (val) => {
+                            await updateSale(row.original.id!, { visa_supplier: val as string });
                         }}
                         className="text-gray-600 text-xs"
                     />
@@ -97,6 +157,7 @@ const Sales = () => {
             {
                 accessorKey: 'passport_number',
                 header: 'Passport No',
+                size: 90,
                 cell: ({ row }) => (
                     <EditableCell
                         value={row.original.passport_number}
@@ -110,6 +171,7 @@ const Sales = () => {
             {
                 accessorKey: 'national',
                 header: 'Nationality',
+                size: 100,
                 cell: ({ row }) => (
                     <EditableCell
                         value={row.original.national}
@@ -121,21 +183,9 @@ const Sales = () => {
                 ),
             },
             {
-                accessorKey: 'service',
-                header: 'Service',
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.service}
-                        onSave={async (val) => {
-                            await updateSale(row.original.id!, { service: val as string });
-                        }}
-                        className="text-gray-700 text-xs"
-                    />
-                ),
-            },
-            {
                 accessorKey: 'net_rate',
                 header: 'Net Rate',
+                size: 100,
                 cell: ({ row }) => (
                     <EditableCell
                         value={row.original.net_rate}
@@ -154,6 +204,7 @@ const Sales = () => {
             {
                 accessorKey: 'sales_rate',
                 header: 'Sales Rate',
+                size: 100,
                 cell: ({ row }) => (
                     <EditableCell
                         value={row.original.sales_rate}
@@ -172,6 +223,7 @@ const Sales = () => {
             {
                 accessorKey: 'profit',
                 header: 'Profit',
+                size: 100,
                 cell: (info) => {
                     const profit = info.getValue() as number;
                     return (
@@ -184,6 +236,7 @@ const Sales = () => {
             {
                 accessorKey: 'documents',
                 header: 'Documents',
+                size: 70,
                 cell: ({ row }) => (
                     <DocumentCell
                         value={row.original.documents}
@@ -200,6 +253,7 @@ const Sales = () => {
             {
                 accessorKey: 'status',
                 header: 'Remarks',
+                size: 90,
                 cell: ({ row, getValue }) => (
                     <StatusSelect
                         value={getValue() as string}
@@ -216,57 +270,92 @@ const Sales = () => {
     const totalProfit = sales.reduce((sum, s) => sum + (s.profit || 0), 0);
 
     return (
-        <div className="p-2.5 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-8">
+        <div className="p-1 h-full flex flex-col">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-left text-[var(--dark-brown)] flex items-center gap-3">
                         <BarChart3 className="text-green-600" />
                         Sales
                     </h1>
-                    <p className="text-gray-500 mt-1">
-                        Track your revenue and transactions.
-                        <span className="ml-2 font-semibold text-gray-700">
-                            Total: AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className="ml-2 font-semibold text-green-600">
-                            Profit: AED {totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Sales: <span className="font-mono text-green-600">AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        {' | '}
+                        Profit: <span className="font-mono text-green-600">AED {totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="bg-white rounded-lg px-4 py-2.5 border border-green-200 shadow-sm">
-                        <p className="text-xs text-gray-500 mb-0.5">Total Sales</p>
-                        <p className="text-lg font-bold text-green-600 font-mono">
-                            AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </p>
+                
+                {/* Tabs */}
+                <div className="flex justify-center">
+                    <div className="flex p-1 bg-gray-100 rounded-lg">
+                        <button
+                            onClick={() => setActiveTab('transactions')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                                activeTab === 'transactions' 
+                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            <LayoutList size={16} />
+                            Transactions
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('statement')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                                activeTab === 'statement' 
+                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            <FileText size={16} />
+                            Monthly Statement
+                        </button>
                     </div>
-                    <button
-                        onClick={() => { setSelectedSale(null); setIsModalOpen(true); }}
-                        className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
-                    >
-                        <PlusCircle size={20} />
-                        New Sale
-                    </button>
+                </div>
+
+                <div className="flex justify-end">
+                    {activeTab === 'transactions' && (
+                        <div className="flex items-center gap-3">
+                            <div className="bg-white rounded-lg px-4 py-2.5 border border-green-200 shadow-sm">
+                                <p className="text-xs text-gray-500 mb-0.5">Total Sales</p>
+                                <p className="text-lg font-bold text-green-600 font-mono">
+                                    AED {totalSales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => { setSelectedSale(null); setIsModalOpen(true); }}
+                                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all font-medium"
+                            >
+                                <PlusCircle size={20} />
+                                New Sale
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto bg-white rounded-md shadow-sm border border-gray-100">
+            <div className="flex-1 overflow-hidden">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64">
                         <Loader2 className="animate-spin text-green-600" size={32} />
                     </div>
-                ) : sales.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                        <div className="text-6xl mb-4">??</div>
-                        <p className="text-lg">No sales recorded yet</p>
-                        <p className="text-sm">Click "New Sale" to add your first entry</p>
-                    </div>
+                ) : activeTab === 'transactions' ? (
+                    sales.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-white rounded-md shadow-sm border border-gray-100">
+                            <div className="text-6xl mb-4">??</div>
+                            <p className="text-lg">No sales recorded yet</p>
+                            <p className="text-sm">Click "New Sale" to add your first entry</p>
+                        </div>
+                    ) : (
+                        <div className="h-full bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden">
+                            <DataTable
+                                columns={columns}
+                                data={sortedSales}
+                                highlightInfo={highlightId ? { rowId: highlightId, columnKey: highlightKey || undefined } : null}
+                            />
+                        </div>
+                    )
                 ) : (
-                    <DataTable
-                        columns={columns}
-                        data={sortedSales}
-                        highlightInfo={highlightId ? { rowId: highlightId, columnKey: highlightKey || undefined } : null}
-                    />
+                    <MonthlyStatement data={sales} type="agency" />
                 )}
             </div>
 

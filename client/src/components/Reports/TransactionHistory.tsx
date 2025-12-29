@@ -7,6 +7,7 @@ interface Transaction {
     type: 'sale' | 'expense' | 'supplier_payment' | 'salary_payment';
     date: Date;
     modifiedDate: Date; // For sorting by date modified
+    createdAt: Date;
     amount: number;
     description: string;
     status?: string;
@@ -60,11 +61,13 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, fi
     filteredSales.forEach((sale) => {
         const saleDate = new Date(sale.date);
         const modifiedDate = sale.updated_at ? new Date(sale.updated_at) : (sale.created_at ? new Date(sale.created_at) : saleDate);
+        const createdAt = sale.created_at ? new Date(sale.created_at) : saleDate;
         transactions.push({
             id: `sale-${sale.id}`,
             type: 'sale',
             date: saleDate,
             modifiedDate: modifiedDate,
+            createdAt,
             amount: sale.sales_rate || 0,
             description: `${sale.agency || 'Unknown'} - ${sale.service || 'Service'}`,
             status: sale.status || 'completed',
@@ -79,11 +82,13 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, fi
     filteredExpenses.forEach((expense) => {
         const expenseDate = new Date(expense.date);
         const modifiedDate = expense.updated_at ? new Date(expense.updated_at) : (expense.created_at ? new Date(expense.created_at) : expenseDate);
+        const createdAt = expense.created_at ? new Date(expense.created_at) : expenseDate;
         transactions.push({
             id: `expense-${expense.id}`,
             type: 'expense',
             date: expenseDate,
             modifiedDate: modifiedDate,
+            createdAt,
             amount: -(expense.amount || 0),
             description: `${expense.category || 'Expense'}: ${expense.description || 'No description'}`,
             status: expense.status || 'completed',
@@ -98,11 +103,13 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, fi
     filteredSupplierPayments.forEach((payment) => {
         const paymentDate = new Date(payment.date);
         const modifiedDate = payment.updated_at ? new Date(payment.updated_at) : (payment.created_at ? new Date(payment.created_at) : paymentDate);
+        const createdAt = payment.created_at ? new Date(payment.created_at) : paymentDate;
         transactions.push({
             id: `supplier-${payment.id}`,
             type: 'supplier_payment',
             date: paymentDate,
             modifiedDate: modifiedDate,
+            createdAt,
             amount: -(payment.amount || 0),
             description: `Payment to ${payment.supplier_name || 'Supplier'}`,
             status: payment.status || 'completed',
@@ -117,11 +124,13 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, fi
     filteredSalaryPayments.forEach((payment) => {
         const paymentDate = new Date(payment.date);
         const modifiedDate = payment.updated_at ? new Date(payment.updated_at) : (payment.created_at ? new Date(payment.created_at) : paymentDate);
+        const createdAt = payment.created_at ? new Date(payment.created_at) : paymentDate;
         transactions.push({
             id: `salary-${payment.id}`,
             type: 'salary_payment',
             date: paymentDate,
             modifiedDate: modifiedDate,
+            createdAt,
             amount: -(payment.amount || 0),
             description: `Salary for ${payment.staff_name || 'Staff'} - ${payment.paid_month || 'Month'}`,
             status: payment.status || 'completed',
@@ -132,19 +141,18 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, fi
         });
     });
 
-    // Sort by date modified (updated_at) first, then by created_at, then by date (newest first)
+    // Sort by creation time first (newest on top), position remains stable after updates
     transactions.sort((a, b) => {
-        // First sort by modified date (most recently modified first)
-        const modifiedDiff = b.modifiedDate.getTime() - a.modifiedDate.getTime();
-        if (modifiedDiff !== 0) return modifiedDiff;
-        // If modified dates are equal, sort by transaction date
+        const createdDiff = b.createdAt.getTime() - a.createdAt.getTime();
+        if (createdDiff !== 0) return createdDiff;
+        // Tie-breaker: original transaction date
         return b.date.getTime() - a.date.getTime();
     });
 
-    // Group transactions by modified date (most recent activity first)
+    // Group transactions by creation date (stacked by when they were created)
     const groupedTransactions: Record<string, Transaction[]> = {};
     transactions.forEach((transaction) => {
-        const dateKey = transaction.modifiedDate.toLocaleDateString('en-US', {
+        const dateKey = transaction.createdAt.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
@@ -252,11 +260,24 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, fi
                                             )}
                                             <p className="text-xs text-gray-500 flex items-center gap-1">
                                                 <Calendar size={12} />
-                                                {transaction.modifiedDate.toLocaleTimeString('en-US', {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                    hour12: true
-                                                })}
+                                                <span className="font-medium">Created:</span>
+                                                <span title="Indian Standard Time">
+                                                    {transaction.createdAt.toLocaleTimeString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: true,
+                                                        timeZone: 'Asia/Kolkata'
+                                                    })} IST
+                                                </span>
+                                                <span className="mx-1">•</span>
+                                                <span title="Gulf Standard Time">
+                                                    {transaction.createdAt.toLocaleTimeString('en-US', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        hour12: true,
+                                                        timeZone: 'Asia/Dubai'
+                                                    })} GST
+                                                </span>
                                             </p>
                                         </div>
                                     </div>

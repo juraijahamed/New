@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, CreditCard } from 'lucide-react';
+import { PlusCircle, Loader2, CreditCard, LayoutList, FileText } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import SupplierPaymentModal from '../components/Modals/SupplierPaymentModal';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
@@ -10,6 +10,7 @@ import { EditableCell } from '../components/UI/EditableCell';
 import { DocumentCell } from '../components/UI/DocumentCell';
 import { useSearchParams } from 'react-router-dom';
 import { fileUploadApi, type SupplierPayment } from '../services/api';
+import MonthlyStatement from '../components/Reports/MonthlyStatement';
 
 import config from '../config';
 
@@ -18,6 +19,7 @@ const SupplierPayments = () => {
     const [searchParams] = useSearchParams();
     const highlightId = searchParams.get('highlightId');
     const highlightKey = searchParams.get('highlightKey');
+    const [activeTab, setActiveTab] = useState<'transactions' | 'statement'>('transactions');
 
     // Strict ID Ascending sort for a cleaner "series" view (1, 2, 3...)
     const sortedPayments = useMemo(() => {
@@ -144,45 +146,89 @@ const SupplierPayments = () => {
 
     return (
         <div className="p-2.5 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-8">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-[var(--dark-brown)] flex items-center gap-3">
                         <CreditCard className="text-purple-600" />
                         Supplier Payments
                     </h1>
-                    <p className="text-gray-500 mt-1">
-                        Manage payments to your suppliers.
-                        <span className="ml-2 font-semibold text-purple-600">
-                            Total: AED {totalPayments.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Total Payments: <span className="font-mono text-purple-600">AED {totalPayments.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </p>
                 </div>
-                <button
-                    onClick={() => { setSelectedPayment(null); setIsModalOpen(true); }}
-                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all font-medium"
-                >
-                    <PlusCircle size={20} />
-                    New Payment
-                </button>
+                
+                {/* Tabs */}
+                <div className="flex justify-center">
+                    <div className="flex p-1 bg-gray-100 rounded-lg">
+                        <button
+                            onClick={() => setActiveTab('transactions')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                                activeTab === 'transactions' 
+                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            <LayoutList size={16} />
+                            Transactions
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('statement')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                                activeTab === 'statement' 
+                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            <FileText size={16} />
+                            Monthly Statement
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex justify-end">
+                    {activeTab === 'transactions' && (
+                        <div className="flex items-center gap-3">
+                            <div className="bg-white rounded-lg px-4 py-2.5 border border-purple-200 shadow-sm">
+                                <p className="text-xs text-gray-500 mb-0.5">Total Payments</p>
+                                <p className="text-lg font-bold text-purple-600 font-mono">
+                                    AED {totalPayments.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => { setSelectedPayment(null); setIsModalOpen(true); }}
+                                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-5 py-2.5 rounded-[10px] flex items-center gap-2 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all font-medium"
+                            >
+                                <PlusCircle size={20} />
+                                New Payment
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            <div className="flex-1 overflow-auto bg-white rounded-[6px] shadow-sm border border-gray-100">
+            <div className="flex-1 overflow-hidden">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64">
                         <Loader2 className="animate-spin text-purple-600" size={32} />
                     </div>
-                ) : supplierPayments.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                        <div className="text-6xl mb-4">💳</div>
-                        <p className="text-lg">No supplier payments recorded yet</p>
-                        <p className="text-sm">Click "New Payment" to add your first entry</p>
-                    </div>
+                ) : activeTab === 'transactions' ? (
+                    supplierPayments.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-white rounded-[6px] shadow-sm border border-gray-100">
+                            <div className="text-6xl mb-4">💳</div>
+                            <p className="text-lg">No supplier payments recorded yet</p>
+                            <p className="text-sm">Click "New Payment" to add your first entry</p>
+                        </div>
+                    ) : (
+                        <div className="h-full bg-white rounded-[6px] shadow-sm border border-gray-100 overflow-hidden">
+                            <DataTable
+                                columns={columns}
+                                data={sortedPayments}
+                                highlightInfo={highlightId ? { rowId: highlightId, columnKey: highlightKey || undefined } : null}
+                            />
+                        </div>
+                    )
                 ) : (
-                    <DataTable
-                        columns={columns}
-                        data={sortedPayments}
-                        highlightInfo={highlightId ? { rowId: highlightId, columnKey: highlightKey || undefined } : null}
-                    />
+                    <MonthlyStatement data={supplierPayments} type="supplier" />
                 )}
             </div>
 

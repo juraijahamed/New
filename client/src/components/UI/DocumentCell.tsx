@@ -100,7 +100,7 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
                 <button
                     onClick={handleUploadClick}
                     disabled={isUploading}
-                    className="p-1 px-2.5 bg-gray-50 text-gray-600 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors group flex items-center gap-1.5 disabled:opacity-50 cursor-cell"
+                    className="p-1 bg-gray-50 text-gray-600 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors group flex items-center gap-0.5 disabled:opacity-50 cursor-cell"
                     title="Upload document"
                 >
                     {isUploading ? (
@@ -108,9 +108,6 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
                     ) : (
                         <Upload size={14} className="group-hover:translate-y-[-1px] transition-transform" />
                     )}
-                    <span className="text-[11px] font-semibold uppercase tracking-wider">
-                        {isUploading ? '...' : 'Docs'}
-                    </span>
                 </button>
             </div>
         );
@@ -121,7 +118,7 @@ export const DocumentCell: React.FC<DocumentCellProps> = ({
             <div className="relative group/file">
                 <button
                     onClick={(e) => handleViewFile(value, e)}
-                    className="p-1.5 bg-blue-50 text-blue-600 rounded border border-blue-100 flex items-center justify-center hover:bg-blue-100 transition-all cursor-cell shadow-sm"
+                    className="p-1 bg-blue-50 text-blue-600 rounded border border-blue-100 flex items-center justify-center hover:bg-blue-100 transition-all cursor-cell shadow-sm"
                     title="View document"
                 >
                     <FileText size={14} />

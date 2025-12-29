@@ -27,6 +27,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
         agency: '',
+        client: '',
         supplier: '',
         national: '',
         passport_number: '',
@@ -35,6 +36,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
         sales_rate: '',
         documents: '',
         remarks: '',
+        bus_supplier: '',
+        visa_supplier: '',
+        ticket_supplier: '',
     });
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
@@ -72,6 +76,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
             setFormData({
                 date: sale.date || new Date().toISOString().split('T')[0],
                 agency: sale.agency || '',
+                client: sale.client || '',
                 supplier: sale.supplier || '',
                 national: nationalityInList ? (sale.national || '') : 'Other',
                 passport_number: sale.passport_number || '',
@@ -80,6 +85,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 sales_rate: String(sale.sales_rate || ''),
                 documents: sale.documents || '',
                 remarks: sale.remarks || '',
+                bus_supplier: sale.bus_supplier || '',
+                visa_supplier: sale.visa_supplier || '',
+                ticket_supplier: sale.ticket_supplier || '',
             });
 
             // Set custom values if not in list
@@ -97,6 +105,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
             setFormData({
                 date: new Date().toISOString().split('T')[0],
                 agency: '',
+                client: '',
                 supplier: '',
                 national: '',
                 passport_number: '',
@@ -105,6 +114,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 sales_rate: '',
                 documents: '',
                 remarks: '',
+                bus_supplier: '',
+                visa_supplier: '',
+                ticket_supplier: '',
             });
             setCustomService('');
             setCustomNationality('');
@@ -136,6 +148,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
             const saleData = {
                 date: formData.date,
                 agency: formData.agency,
+                client: formData.client,
                 supplier: formData.supplier,
                 national: finalNationality,
                 passport_number: formData.passport_number,
@@ -146,6 +159,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 documents: documents,
                 remarks: formData.remarks,
                 status: 'draft',
+                bus_supplier: formData.bus_supplier || '',
+                visa_supplier: formData.visa_supplier || '',
+                ticket_supplier: formData.ticket_supplier || '',
             };
 
             if (sale?.id) {
@@ -223,8 +239,23 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                             required
                             value={formData.service}
                             onChange={(e) => {
-                                setFormData({ ...formData, service: e.target.value });
-                                if (e.target.value !== 'Other') setCustomService('');
+                                const newService = e.target.value;
+                                // Clear conditional supplier fields when service type changes
+                                const updatedFormData = { ...formData, service: newService };
+                                
+                                // Clear fields that don't apply to the new service type
+                                if (newService !== 'B2B') {
+                                    updatedFormData.bus_supplier = '';
+                                }
+                                if (newService !== 'B2B' && newService !== 'A2A') {
+                                    updatedFormData.visa_supplier = '';
+                                }
+                                if (newService !== 'A2A') {
+                                    updatedFormData.ticket_supplier = '';
+                                }
+                                
+                                setFormData(updatedFormData);
+                                if (newService !== 'Other') setCustomService('');
                             }}
                             className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
                             style={inputStyle}
@@ -263,13 +294,12 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Agency/Client</label>
+                        <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Agency</label>
                         <AutocompleteInput
                             value={formData.agency}
                             onChange={(value) => setFormData({ ...formData, agency: value })}
                             suggestions={suggestions.agencies}
-                            placeholder="Client or Agency name"
-                            required
+                            placeholder="Agency name"
                             style={{
                                 border: '2px solid #e8ddd0',
                                 background: '#fdf9f3',
@@ -279,12 +309,13 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Supplier</label>
+                        <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Client</label>
                         <AutocompleteInput
-                            value={formData.supplier}
-                            onChange={(value) => setFormData({ ...formData, supplier: value })}
-                            suggestions={suggestions.suppliers}
-                            placeholder="Supplier name"
+                            value={formData.client}
+                            onChange={(value) => setFormData({ ...formData, client: value })}
+                            suggestions={suggestions.agencies}
+                            placeholder="Client name"
+                            required
                             style={{
                                 border: '2px solid #e8ddd0',
                                 background: '#fdf9f3',
@@ -293,6 +324,84 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                         />
                     </div>
                 </div>
+
+                {/* Conditional Supplier Fields for B2B */}
+                {formData.service === 'B2B' && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="grid grid-cols-2 gap-4"
+                    >
+                        <div>
+                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Bus Supplier</label>
+                            <AutocompleteInput
+                                value={formData.bus_supplier}
+                                onChange={(value) => setFormData({ ...formData, bus_supplier: value })}
+                                suggestions={suggestions.suppliers}
+                                placeholder="Bus supplier name"
+                                style={{
+                                    border: '2px solid #e8ddd0',
+                                    background: '#fdf9f3',
+                                    color: '#5D4037'
+                                }}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
+                            <AutocompleteInput
+                                value={formData.visa_supplier}
+                                onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
+                                suggestions={suggestions.suppliers}
+                                placeholder="Visa supplier name"
+                                style={{
+                                    border: '2px solid #e8ddd0',
+                                    background: '#fdf9f3',
+                                    color: '#5D4037'
+                                }}
+                            />
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Conditional Supplier Fields for A2A */}
+                {formData.service === 'A2A' && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="grid grid-cols-2 gap-4"
+                    >
+                        <div>
+                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Ticket Supplier</label>
+                            <AutocompleteInput
+                                value={formData.ticket_supplier}
+                                onChange={(value) => setFormData({ ...formData, ticket_supplier: value })}
+                                suggestions={suggestions.suppliers}
+                                placeholder="Ticket supplier name"
+                                style={{
+                                    border: '2px solid #e8ddd0',
+                                    background: '#fdf9f3',
+                                    color: '#5D4037'
+                                }}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
+                            <AutocompleteInput
+                                value={formData.visa_supplier}
+                                onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
+                                suggestions={suggestions.suppliers}
+                                placeholder="Visa supplier name"
+                                style={{
+                                    border: '2px solid #e8ddd0',
+                                    background: '#fdf9f3',
+                                    color: '#5D4037'
+                                }}
+                            />
+                        </div>
+                    </motion.div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                     <div>

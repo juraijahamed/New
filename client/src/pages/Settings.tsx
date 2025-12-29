@@ -8,6 +8,7 @@ import Modal from '../components/UI/Modal';
 import ConfirmModal from '../components/UI/ConfirmModal';
 import type { Staff, DropdownOption } from '../services/api';
 import { dropdownOptionsApi } from '../services/api';
+import config from '../config';
 
 const POSITIONS = [
     'Manager',
@@ -344,6 +345,11 @@ const Settings = () => {
                 </h1>
                 <p className="text-gray-500 mt-1">Manage your account and application settings.</p>
             </div>
+            <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                <p className="text-xs text-blue-800">
+                    Tip: Tables support inline cell editing on double-click. Double-click an ID cell to open the editable form for that row. You can copy a selected cell using Ctrl+C.
+                </p>
+            </div>
 
             {/* Staff Management Section */}
             <div className="bg-white rounded-sm shadow-sm border border-gray-100 p-6">
@@ -374,7 +380,7 @@ const Settings = () => {
                     </div>
                 ) : (
                     <div className="overflow-auto">
-                        <DataTable columns={columns} data={staff} />
+                        <DataTable columns={columns} data={staff} onEdit={handleEdit} />
                     </div>
                 )}
             </div>
@@ -489,7 +495,8 @@ const Settings = () => {
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                         <div>
                             <p className="font-medium text-gray-900">Application Info</p>
-                            <p className="text-sm text-gray-500">HAWK Travelmate v2.0</p>
+                            <p className="text-sm text-gray-500">{config.APP_NAME} v{config.VERSION}</p>
+                            <p className="text-xs text-gray-400">API: {config.API_URL}</p>
                         </div>
                         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
                             Active

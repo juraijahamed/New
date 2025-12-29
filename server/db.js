@@ -18,91 +18,97 @@ const pool = new Pool(
 );
 
 async function initSchema() {
-  // Keep table/column names aligned with the current SQLite schema
-  // so the client and routes don't need to change.
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      name TEXT UNIQUE,
-      role TEXT DEFAULT 'staff'
-    );
+  try {
+    // Keep table/column names aligned with the current SQLite schema
+    // so the client and routes don't need to change.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE,
+        role TEXT DEFAULT 'staff'
+      );
 
-    CREATE TABLE IF NOT EXISTS expenses (
-      id SERIAL PRIMARY KEY,
-      description TEXT,
-      amount DOUBLE PRECISION,
-      category TEXT,
-      date TEXT,
-      receipt_url TEXT,
-      remarks TEXT,
-      status TEXT,
-      user_id INTEGER,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
+      CREATE TABLE IF NOT EXISTS expenses (
+        id SERIAL PRIMARY KEY,
+        description TEXT,
+        amount DOUBLE PRECISION,
+        category TEXT,
+        date TEXT,
+        receipt_url TEXT,
+        remarks TEXT,
+        status TEXT,
+        user_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
 
-    CREATE TABLE IF NOT EXISTS sales (
-      id SERIAL PRIMARY KEY,
-      date TEXT,
-      agency TEXT,
-      supplier TEXT,
-      national TEXT,
-      service TEXT,
-      net_rate DOUBLE PRECISION,
-      sales_rate DOUBLE PRECISION,
-      profit DOUBLE PRECISION,
-      passport_number TEXT,
-      documents TEXT,
-      remarks TEXT,
-      status TEXT,
-      user_id INTEGER,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
+      CREATE TABLE IF NOT EXISTS sales (
+        id SERIAL PRIMARY KEY,
+        date TEXT,
+        agency TEXT,
+        client TEXT,
+        supplier TEXT,
+        national TEXT,
+        service TEXT,
+        net_rate DOUBLE PRECISION,
+        sales_rate DOUBLE PRECISION,
+        profit DOUBLE PRECISION,
+        passport_number TEXT,
+        documents TEXT,
+        remarks TEXT,
+        status TEXT,
+        user_id INTEGER,
+        bus_supplier TEXT,
+        visa_supplier TEXT,
+        ticket_supplier TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
 
-    CREATE TABLE IF NOT EXISTS staff (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      position TEXT,
-      salary DOUBLE PRECISION,
-      phone TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
+      CREATE TABLE IF NOT EXISTS staff (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        position TEXT,
+        salary DOUBLE PRECISION,
+        phone TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
 
-    CREATE TABLE IF NOT EXISTS supplier_payments (
-      id SERIAL PRIMARY KEY,
-      supplier_name TEXT NOT NULL,
-      amount DOUBLE PRECISION NOT NULL,
-      date TEXT NOT NULL,
-      receipt_url TEXT,
-      remarks TEXT,
-      status TEXT,
-      user_id INTEGER,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
+      CREATE TABLE IF NOT EXISTS supplier_payments (
+        id SERIAL PRIMARY KEY,
+        supplier_name TEXT NOT NULL,
+        amount DOUBLE PRECISION NOT NULL,
+        date TEXT NOT NULL,
+        receipt_url TEXT,
+        remarks TEXT,
+        status TEXT,
+        user_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
 
-    CREATE TABLE IF NOT EXISTS salary_payments (
-      id SERIAL PRIMARY KEY,
-      staff_id INTEGER NOT NULL,
-      staff_name TEXT,
-      amount DOUBLE PRECISION NOT NULL,
-      advance DOUBLE PRECISION DEFAULT 0,
-      paid_month TEXT NOT NULL,
-      date TEXT NOT NULL,
-      receipt_url TEXT,
-      remarks TEXT,
-      status TEXT,
-      user_id INTEGER,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
+      CREATE TABLE IF NOT EXISTS salary_payments (
+        id SERIAL PRIMARY KEY,
+        staff_id INTEGER NOT NULL,
+        staff_name TEXT,
+        amount DOUBLE PRECISION NOT NULL,
+        advance DOUBLE PRECISION DEFAULT 0,
+        total_amount DOUBLE PRECISION,
+        paid_month TEXT NOT NULL,
+        date TEXT NOT NULL,
+        receipt_url TEXT,
+        remarks TEXT,
+        status TEXT,
+        user_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
 
-    CREATE TABLE IF NOT EXISTS dropdown_options (
-      id SERIAL PRIMARY KEY,
-      type TEXT NOT NULL,
-      value TEXT NOT NULL,
-      display_order INTEGER DEFAULT 0,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(type, value)
-    );
-  `);
+      CREATE TABLE IF NOT EXISTS dropdown_options (
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL,
+        value TEXT NOT NULL,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(type, value)
+      );
+    `);
 
   // Add color and table_type columns if they don't exist (migration)
   try {
@@ -213,6 +219,80 @@ async function initSchema() {
     }
   }
 
+  // Add new columns to sales table for conditional supplier fields
+  try {
+    const clientCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='sales' AND column_name='client'
+    `);
+    if (clientCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE sales ADD COLUMN client TEXT');
+    }
+    // Convert NULL to empty string for existing records
+    await pool.query("UPDATE sales SET client = '' WHERE client IS NULL");
+
+    const busSupplierCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='sales' AND column_name='bus_supplier'
+    `);
+    if (busSupplierCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE sales ADD COLUMN bus_supplier TEXT');
+    }
+    // Convert NULL to empty string for existing records
+    await pool.query("UPDATE sales SET bus_supplier = '' WHERE bus_supplier IS NULL");
+
+    const visaSupplierCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='sales' AND column_name='visa_supplier'
+    `);
+    if (visaSupplierCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE sales ADD COLUMN visa_supplier TEXT');
+    }
+    // Convert NULL to empty string for existing records
+    await pool.query("UPDATE sales SET visa_supplier = '' WHERE visa_supplier IS NULL");
+
+    const ticketSupplierCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='sales' AND column_name='ticket_supplier'
+    `);
+    if (ticketSupplierCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE sales ADD COLUMN ticket_supplier TEXT');
+    }
+    // Convert NULL to empty string for existing records
+    await pool.query("UPDATE sales SET ticket_supplier = '' WHERE ticket_supplier IS NULL");
+  } catch (err) {
+    console.error('Error adding new sales columns:', err);
+  }
+
+  // Ensure total_amount column exists on salary_payments and backfill values
+  try {
+    const totalAmountCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='salary_payments' AND column_name='total_amount'
+    `);
+    if (totalAmountCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE salary_payments ADD COLUMN total_amount DOUBLE PRECISION');
+      await pool.query(`
+        UPDATE salary_payments 
+        SET total_amount = COALESCE(amount, 0) - COALESCE(advance, 0)
+        WHERE total_amount IS NULL
+      `);
+    } else {
+      await pool.query(`
+        UPDATE salary_payments 
+        SET total_amount = COALESCE(amount, 0) - COALESCE(advance, 0)
+        WHERE total_amount IS NULL
+      `);
+    }
+  } catch (err) {
+    console.error('Error ensuring total_amount on salary_payments:', err);
+  }
+
   // Cleanup: Remove existing duplicates before seeding
   try {
     await pool.query(`
@@ -250,6 +330,8 @@ async function initSchema() {
   }
 
   const defaultServices = [
+    'B2B',
+    'A2A',
     'Visa Services',
     'Ticketing',
     'Hotel Booking',
@@ -284,6 +366,10 @@ async function initSchema() {
   await seedOptions('nationality', defaultNationalities);
   await seedOptions('category', defaultCategories);
   await seedOptions('position', defaultPositions);
+  } catch (error) {
+    console.error('Error initializing database schema:', error);
+    throw error;
+  }
 }
 
 module.exports = {

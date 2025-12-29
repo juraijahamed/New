@@ -84,7 +84,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const refreshSales = useCallback(async () => {
         const data = await salesApi.getAll();
-        setSales(data);
+        // Convert null values to empty strings for the new fields to ensure proper display
+        const sanitizedData = data.map(sale => ({
+            ...sale,
+            client: sale.client || '',
+            bus_supplier: sale.bus_supplier || '',
+            visa_supplier: sale.visa_supplier || '',
+            ticket_supplier: sale.ticket_supplier || '',
+        }));
+        setSales(sanitizedData);
     }, []);
 
     const refreshStaff = useCallback(async () => {
@@ -193,14 +201,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Connection status
         socket.on('connect', () => {
-            console.log('Socket.IO connected with ID:', socket.id);
+            // console.log('Socket.IO connected with ID:', socket.id);
             setIsServerOnline(true);
         });
-        socket.on('connect_error', (error) => {
-            console.error('Socket.IO connection error:', error);
+        socket.on('connect_error', () => {
+            // console.error('Socket.IO connection error:', error);
         });
-        socket.on('disconnect', (reason) => {
-            console.log('Socket.IO disconnected. Reason:', reason);
+        socket.on('disconnect', () => {
+            // console.log('Socket.IO disconnected. Reason:', reason);
             setIsServerOnline(false);
         });
 
@@ -259,7 +267,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 return user?.id;
             }
         } catch (e) {
-            console.error('Error getting user from localStorage:', e);
+            // console.error('Error getting user from localStorage:', e);
         }
         return undefined;
     };
