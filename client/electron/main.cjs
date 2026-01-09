@@ -23,7 +23,13 @@ function createWindow() {
 
     if (process.env.NODE_ENV === 'development') {
         mainWindow.loadURL('http://localhost:5173');
-        mainWindow.webContents.openDevTools();
+        // Open DevTools only when explicitly requested to reduce noisy DevTools protocol errors
+        if (process.env.SHOW_DEVTOOLS === 'true') {
+            mainWindow.webContents.openDevTools({ mode: 'detach' });
+            console.log('DevTools opened (SHOW_DEVTOOLS=true)');
+        } else {
+            console.log('DevTools suppressed (set SHOW_DEVTOOLS=true to enable)');
+        }
     } else {
         mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     }

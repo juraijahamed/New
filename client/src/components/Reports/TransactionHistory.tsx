@@ -20,37 +20,59 @@ interface Transaction {
 interface TransactionHistoryProps {
     filterMonth?: number;
     filterYear?: number;
+    filterDate?: string;
+    viewMode?: 'monthly' | 'daily';
 }
 
-const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, filterYear }) => {
+const TransactionHistory: React.FC<TransactionHistoryProps> = ({ filterMonth, filterYear, filterDate, viewMode = 'monthly' }) => {
     const { sales, expenses, supplierPayments, salaryPayments } = useData();
 
-    // Filter transactions based on filterMonth and filterYear if provided
-    const filteredSales = filterMonth !== undefined && filterYear !== undefined
+    // Filter transactions based on view mode
+    const filteredSales = viewMode === 'monthly' && filterMonth !== undefined && filterYear !== undefined
         ? sales.filter(sale => {
             const saleDate = new Date(sale.date);
             return saleDate.getMonth() === filterMonth && saleDate.getFullYear() === filterYear;
         })
+        : viewMode === 'daily' && filterDate
+        ? sales.filter(sale => {
+            const saleDate = new Date(sale.date);
+            return saleDate.toISOString().split('T')[0] === filterDate;
+        })
         : sales;
 
-    const filteredExpenses = filterMonth !== undefined && filterYear !== undefined
+    const filteredExpenses = viewMode === 'monthly' && filterMonth !== undefined && filterYear !== undefined
         ? expenses.filter(expense => {
             const expenseDate = new Date(expense.date);
             return expenseDate.getMonth() === filterMonth && expenseDate.getFullYear() === filterYear;
         })
+        : viewMode === 'daily' && filterDate
+        ? expenses.filter(expense => {
+            const expenseDate = new Date(expense.date);
+            return expenseDate.toISOString().split('T')[0] === filterDate;
+        })
         : expenses;
 
-    const filteredSupplierPayments = filterMonth !== undefined && filterYear !== undefined
+    const filteredSupplierPayments = viewMode === 'monthly' && filterMonth !== undefined && filterYear !== undefined
         ? supplierPayments.filter(payment => {
             const paymentDate = new Date(payment.date);
             return paymentDate.getMonth() === filterMonth && paymentDate.getFullYear() === filterYear;
         })
+        : viewMode === 'daily' && filterDate
+        ? supplierPayments.filter(payment => {
+            const paymentDate = new Date(payment.date);
+            return paymentDate.toISOString().split('T')[0] === filterDate;
+        })
         : supplierPayments;
 
-    const filteredSalaryPayments = filterMonth !== undefined && filterYear !== undefined
+    const filteredSalaryPayments = viewMode === 'monthly' && filterMonth !== undefined && filterYear !== undefined
         ? salaryPayments.filter(payment => {
             const paymentDate = new Date(payment.date);
             return paymentDate.getMonth() === filterMonth && paymentDate.getFullYear() === filterYear;
+        })
+        : viewMode === 'daily' && filterDate
+        ? salaryPayments.filter(payment => {
+            const paymentDate = new Date(payment.date);
+            return paymentDate.toISOString().split('T')[0] === filterDate;
         })
         : salaryPayments;
 

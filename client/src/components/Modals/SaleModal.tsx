@@ -242,18 +242,21 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                                 const newService = e.target.value;
                                 // Clear conditional supplier fields when service type changes
                                 const updatedFormData = { ...formData, service: newService };
-                                
+
+                                const isVisaService = typeof newService === 'string' && newService.toLowerCase().includes('visa');
+
                                 // Clear fields that don't apply to the new service type
                                 if (newService !== 'B2B') {
                                     updatedFormData.bus_supplier = '';
                                 }
-                                if (newService !== 'B2B' && newService !== 'A2A') {
+                                // Keep visa_supplier when the selected service is a visa-type
+                                if (!isVisaService && newService !== 'B2B' && newService !== 'A2A') {
                                     updatedFormData.visa_supplier = '';
                                 }
                                 if (newService !== 'A2A') {
                                     updatedFormData.ticket_supplier = '';
                                 }
-                                
+
                                 setFormData(updatedFormData);
                                 if (newService !== 'Other') setCustomService('');
                             }}
@@ -267,6 +270,19 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                                 <option key={s} value={s}>{s}</option>
                             ))}
                         </select>
+                        {formData.service && (
+                            <div className="mt-2">
+                                {formData.service === 'A2A' ? (
+                                    <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-600 text-white">
+                                        ✈️ A2A
+                                    </span>
+                                ) : formData.service === 'B2B' ? (
+                                    <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white">
+                                        🚌 B2B
+                                    </span>
+                                ) : null}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -289,6 +305,31 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                             onBlur={(e) => e.target.style.borderColor = '#e8ddd0'}
                             placeholder="Enter custom service type..."
                         />
+                    </motion.div>
+                )}
+
+                {/* Conditional Visa Supplier for services containing 'visa' (non-B2B/A2A) */}
+                {typeof formData.service === 'string' && formData.service.toLowerCase().includes('visa') && formData.service !== 'B2B' && formData.service !== 'A2A' && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="grid grid-cols-1 gap-4"
+                    >
+                        <div>
+                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
+                            <AutocompleteInput
+                                value={formData.visa_supplier}
+                                onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
+                                suggestions={suggestions.suppliers}
+                                placeholder="Visa supplier name"
+                                style={{
+                                    border: '2px solid #e8ddd0',
+                                    background: '#fdf9f3',
+                                    color: '#5D4037'
+                                }}
+                            />
+                        </div>
                     </motion.div>
                 )}
 

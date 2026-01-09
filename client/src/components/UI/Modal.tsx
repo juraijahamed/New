@@ -42,7 +42,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 z-50 flex items-center justify-center p-4"
                     style={{ background: 'rgba(93, 64, 55, 0.6)', backdropFilter: 'blur(8px)' }}
-                    onClick={onClose}
                 >
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0, y: 20 }}

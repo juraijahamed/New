@@ -13,6 +13,9 @@ interface AggregatedData {
     count: number;
     totalAmount: number;
     totalProfit?: number; // Only for agency
+    pendingCount?: number;
+    pendingAmount?: number;
+    pendingProfit?: number;
 }
 
 const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
@@ -43,18 +46,36 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
                     count: 0,
                     totalAmount: 0,
                     totalProfit: type === 'agency' ? 0 : undefined,
+                    pendingCount: 0,
+                    pendingAmount: 0,
+                    pendingProfit: type === 'agency' ? 0 : undefined,
                 };
             }
 
-            groups[name].count += 1;
+            const isPending = item.status === 'pending';
+
+            if (isPending) {
+                groups[name].pendingCount = (groups[name].pendingCount || 0) + 1;
+            } else {
+                groups[name].count += 1;
+            }
             
             if (type === 'agency') {
                 const sale = item as Sale;
-                groups[name].totalAmount += sale.sales_rate || 0;
-                groups[name].totalProfit = (groups[name].totalProfit || 0) + (sale.profit || 0);
+                if (isPending) {
+                    groups[name].pendingAmount = (groups[name].pendingAmount || 0) + (sale.sales_rate || 0);
+                    groups[name].pendingProfit = (groups[name].pendingProfit || 0) + (sale.profit || 0);
+                } else {
+                    groups[name].totalAmount += sale.sales_rate || 0;
+                    groups[name].totalProfit = (groups[name].totalProfit || 0) + (sale.profit || 0);
+                }
             } else {
                 const payment = item as SupplierPayment;
-                groups[name].totalAmount += payment.amount || 0;
+                if (isPending) {
+                    groups[name].pendingAmount = (groups[name].pendingAmount || 0) + (payment.amount || 0);
+                } else {
+                    groups[name].totalAmount += payment.amount || 0;
+                }
             }
         });
 
@@ -66,7 +87,10 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
             amount: acc.amount + curr.totalAmount,
             profit: acc.profit + (curr.totalProfit || 0),
             count: acc.count + curr.count,
-        }), { amount: 0, profit: 0, count: 0 });
+            pendingAmount: acc.pendingAmount + (curr.pendingAmount || 0),
+            pendingProfit: acc.pendingProfit + (curr.pendingProfit || 0),
+            pendingCount: acc.pendingCount + (curr.pendingCount || 0),
+        }), { amount: 0, profit: 0, count: 0, pendingAmount: 0, pendingProfit: 0, pendingCount: 0 });
     }, [aggregatedData]);
 
     const changeMonth = (increment: number) => {
@@ -212,7 +236,7 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                     <p className="text-sm text-blue-600 font-medium mb-1">Total {type === 'agency' ? 'Agencies' : 'Suppliers'}</p>
                     <p className="text-2xl font-bold text-blue-900">{aggregatedData.length}</p>
@@ -220,6 +244,11 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
                 <div className="bg-green-50 p-4 rounded-lg border border-green-100">
                     <p className="text-sm text-green-600 font-medium mb-1">Total Amount</p>
                     <p className="text-2xl font-bold text-green-900">AED {totals.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div className="bg-amber-50 p-4 rounded-lg border border-amber-100">
+                    <p className="text-sm text-amber-600 font-medium mb-1">Pending Amount</p>
+                    <p className="text-2xl font-bold text-amber-900">AED {totals.pendingAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-amber-600 mt-1">{totals.pendingCount} items</p>
                 </div>
                 {type === 'agency' && (
                     <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
@@ -236,20 +265,22 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
             </div>
 
             {/* Data Table */}
-            <div className="flex-1 overflow-auto border border-gray-200 rounded-lg">
+            <div className="flex-1 overflow-auto border border-gray-200 rounded-lg mb-6">
                 <table className="w-full text-sm text-left">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
                         <tr>
                             <th className="px-6 py-3">{type === 'agency' ? 'Agency Name' : 'Supplier Name'}</th>
                             <th className="px-6 py-3 text-center">Transactions</th>
                             <th className="px-6 py-3 text-right">Total Amount</th>
+                            <th className="px-6 py-3 text-center">Pending</th>
+                            <th className="px-6 py-3 text-right">Pending Amount</th>
                             {type === 'agency' && <th className="px-6 py-3 text-right">Total Profit</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                         {aggregatedData.length === 0 ? (
                             <tr>
-                                <td colSpan={type === 'agency' ? 4 : 3} className="px-6 py-12 text-center text-gray-400">
+                                <td colSpan={type === 'agency' ? 6 : 5} className="px-6 py-12 text-center text-gray-400">
                                     No transactions found for this month
                                 </td>
                             </tr>
@@ -264,6 +295,12 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
                                     </td>
                                     <td className="px-6 py-4 text-right font-mono font-medium text-gray-900">
                                         AED {row.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="px-6 py-4 text-center text-amber-600 font-medium">
+                                        {row.pendingCount || 0}
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-mono font-bold text-amber-900">
+                                        AED {(row.pendingAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </td>
                                     {type === 'agency' && (
                                         <td className={`px-6 py-4 text-right font-mono font-bold ${(row.totalProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -281,6 +318,10 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
                                 <td className="px-6 py-3 text-center">{totals.count}</td>
                                 <td className="px-6 py-3 text-right font-mono">
                                     AED {totals.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-6 py-3 text-center text-amber-600">{totals.pendingCount}</td>
+                                <td className="px-6 py-3 text-right font-mono text-amber-900">
+                                    AED {totals.pendingAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </td>
                                 {type === 'agency' && (
                                     <td className="px-6 py-3 text-right font-mono text-green-700">

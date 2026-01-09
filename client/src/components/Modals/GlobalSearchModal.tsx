@@ -26,6 +26,23 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
     const inputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
 
+    // Handle Escape key and click outside
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen) {
+                handleClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleKeyDown);
+        }
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen]);
+
     // Focus input when modal opens
     useEffect(() => {
         if (isOpen && inputRef.current) {
@@ -241,13 +258,13 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                     >
                         {/* Search Input */}
                         <div
-                            className="px-6 py-4"
+                            className="px-6 py-4 flex items-center justify-between"
                             style={{
                                 borderBottom: '1px solid rgba(218, 165, 32, 0.15)',
                                 background: 'linear-gradient(180deg, #fdf9f3 0%, #ffffff 100%)'
                             }}
                         >
-                            <div className="relative">
+                            <div className="relative flex-1">
                                 <Search
                                     size={20}
                                     className="absolute left-3 top-1/2 transform -translate-y-1/2"
@@ -266,11 +283,6 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                                         color: '#5D4037',
                                         fontSize: '15px'
                                     }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Escape') {
-                                            handleClose();
-                                        }
-                                    }}
                                 />
                                 {searchQuery && (
                                     <motion.button
@@ -285,6 +297,15 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                                     </motion.button>
                                 )}
                             </div>
+                            <motion.button
+                                onClick={handleClose}
+                                className="ml-3 p-2 rounded-lg transition-colors"
+                                style={{ color: '#A1887F' }}
+                                whileHover={{ backgroundColor: 'rgba(218, 165, 32, 0.1)', color: '#DAA520' }}
+                                title="Close (Esc)"
+                            >
+                                <X size={20} />
+                            </motion.button>
                         </div>
 
                         {/* Table Controllers */}
@@ -332,8 +353,8 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }
                                         {searchResults.map((result, index) => (
                                             <motion.div
                                                 key={`${result.type}-${result.id}`}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
+                                                initial={{ opacity: 0, x: -20 }}
+                                                animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: index * 0.02 }}
                                                 onClick={() => handleResultClick(result)}
                                                 className="px-4 py-3 rounded-xl cursor-pointer transition-all mb-1"

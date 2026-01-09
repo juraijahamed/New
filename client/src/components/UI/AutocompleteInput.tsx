@@ -21,6 +21,7 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [isSelecting, setIsSelecting] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -51,18 +52,42 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
         if (style.borderColor) {
             e.target.style.borderColor = '#DAA520';
         }
+
+        // Open dropdown if there are matching suggestions (regardless of whether value is empty)
+        if (filteredSuggestions.length > 0) {
+            setIsOpen(true);
+            setHighlightedIndex(-1);
+        }
     };
 
     const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
         if (style.borderColor) {
             e.target.style.borderColor = '#e8ddd0';
         }
+        // Don't close dropdown on blur - let click-outside handler do it
     };
 
+    // When input is focused and suggestions change, open/close dropdown accordingly
+    useEffect(() => {
+        if (isSelecting) {
+            // Don't reopen dropdown while a selection is being processed
+            return;
+        }
+        if (inputRef.current && document.activeElement === inputRef.current && isOpen) {
+            // Only keep it open if it was already open; don't auto-open on suggestions change
+            if (filteredSuggestions.length === 0) {
+                setIsOpen(false);
+            }
+        }
+    }, [filteredSuggestions.length, isSelecting, isOpen]);
+
     const handleSuggestionClick = (suggestion: string) => {
+        setIsSelecting(true);
         onChange(suggestion);
         setIsOpen(false);
         setHighlightedIndex(-1);
+        // Reset selection flag and keep dropdown closed
+        setTimeout(() => setIsSelecting(false), 100);
         inputRef.current?.focus();
     };
 
@@ -122,14 +147,17 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
                 autoComplete="off"
             />
 
-            {isOpen && value && filteredSuggestions.length > 0 && (
+            {isOpen && filteredSuggestions.length > 0 && (
                 <div
-                    className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl max-h-60 overflow-y-auto"
+                    className="absolute z-50 w-full mt-2 rounded-2xl max-h-60 overflow-y-auto"
                     style={{
-                        borderColor: '#DAA520',
-                        border: '2px solid #DAA520',
-                        boxShadow: '0 20px 25px -5px rgba(218, 165, 32, 0.2), 0 10px 10px -5px rgba(218, 165, 32, 0.1)'
+                        background: 'rgba(255, 255, 255, 0.25)',
+                        backdropFilter: 'blur(20px)',
+                        WebkitBackdropFilter: 'blur(20px)',
+                        border: '2px solid rgba(218, 165, 32, 0.25)',
+                        boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.2)'
                     }}
+                    onMouseDown={(e) => e.preventDefault()}
                 >
                     {filteredSuggestions.map((suggestion, index) => {
                         const matchIndex = suggestion.toLowerCase().indexOf(value.toLowerCase());
@@ -142,12 +170,14 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
                                 key={suggestion}
                                 onClick={() => handleSuggestionClick(suggestion)}
                                 className={`px-4 py-3 cursor-pointer transition-all text-sm ${index === highlightedIndex
-                                    ? 'bg-gradient-to-r from-amber-50 to-yellow-50'
-                                    : 'hover:bg-gray-50'
+                                    ? 'bg-gradient-to-r from-amber-100 to-yellow-100'
+                                    : 'bg-white bg-opacity-20 hover:bg-opacity-60'
                                     }`}
                                 style={{
                                     color: '#5D4037',
-                                    borderLeft: index === highlightedIndex ? '3px solid #DAA520' : '3px solid transparent'
+                                    borderLeft: index === highlightedIndex ? '3px solid #DAA520' : '3px solid transparent',
+                                    backdropFilter: 'blur(8px)',
+                                    WebkitBackdropFilter: 'blur(8px)'
                                 }}
                             >
                                 {matchIndex >= 0 ? (

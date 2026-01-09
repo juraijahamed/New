@@ -213,6 +213,66 @@ async function start() {
     }
   });
 
+  // ============ ADMIN: RESET DATA ============
+  app.post('/api/admin/reset-data', async (req, res) => {
+    try {
+      const allow = process.env.ALLOW_RESET === 'true';
+      const token = req.headers['x-reset-token'] || req.query.token || req.body?.token;
+      const expected = process.env.ADMIN_RESET_TOKEN;
+
+      if (!allow) {
+        return res.status(403).json({ error: 'Reset disabled' });
+      }
+      if (!expected || !token || String(token) !== String(expected)) {
+        return res.status(403).json({ error: 'Invalid token' });
+      }
+
+      await pool.query('TRUNCATE TABLE expenses, sales, supplier_payments, salary_payments, staff, users RESTART IDENTITY CASCADE');
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Admin reset error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN: CLEANUP DROPDOWNS ============
+  app.post('/api/admin/cleanup-dropdowns', async (req, res) => {
+    try {
+      const allow = process.env.ALLOW_RESET === 'true';
+      const token = req.headers['x-reset-token'] || req.query.token || req.body?.token;
+      const expected = process.env.ADMIN_RESET_TOKEN;
+
+      if (!allow) {
+        return res.status(403).json({ error: 'Cleanup disabled' });
+      }
+      if (!expected || !token || String(token) !== String(expected)) {
+        return res.status(403).json({ error: 'Invalid token' });
+      }
+
+      await pool.query(`
+        DELETE FROM dropdown_options 
+        WHERE type = 'nationality' 
+          AND value IN ('Bangladeshi','Jordanian','Lebanese','Sudanese','Nepali','Sri Lankan')
+      `);
+      await pool.query(`
+        DELETE FROM dropdown_options 
+        WHERE type = 'category' 
+          AND value = 'Software'
+      `);
+      await pool.query(`
+        DELETE FROM dropdown_options 
+        WHERE type = 'position' 
+          AND value IN ('IT Support','PRO')
+      `);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Admin dropdown cleanup error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============ EXPENSES ============
   app.get('/api/expenses', async (req, res) => {
     try {
@@ -614,13 +674,13 @@ async function start() {
   });
 
   app.post('/api/supplier-payments', async (req, res) => {
-    const { supplier_name, amount, date, receipt_url, remarks, status, user_id } = req.body;
+    const { supplier_name, amount, date, receipt_url, remarks, status, user_id, bus_supplier, bus_amount, visa_supplier, visa_amount, ticket_supplier, ticket_amount } = req.body;
     try {
       const inserted = await pool.query(
-        `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id, bus_supplier, bus_amount, visa_supplier, visa_amount, ticket_supplier, ticket_amount)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
-        [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null]
+        [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null, bus_supplier || null, bus_amount || null, visa_supplier || null, visa_amount || null, ticket_supplier || null, ticket_amount || null]
       );
       // Fetch with user names
       const withNames = await pool.query(`
@@ -645,10 +705,10 @@ async function start() {
         try {
           await initSchema();
           const inserted = await pool.query(
-            `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            `INSERT INTO supplier_payments (supplier_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id, bus_supplier, bus_amount, visa_supplier, visa_amount, ticket_supplier, ticket_amount)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
            RETURNING *`,
-            [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null]
+            [supplier_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null, bus_supplier || null, bus_amount || null, visa_supplier || null, visa_amount || null, ticket_supplier || null, ticket_amount || null]
           );
           const withNames = await pool.query(`
             SELECT 
@@ -676,7 +736,7 @@ async function start() {
     const { id } = req.params;
     const updates = req.body;
     const { user_id, ...updateFields } = updates;
-    const validFields = ['supplier_name', 'amount', 'date', 'receipt_url', 'remarks', 'status'];
+    const validFields = ['supplier_name', 'amount', 'date', 'receipt_url', 'remarks', 'status', 'bus_supplier', 'bus_amount', 'visa_supplier', 'visa_amount', 'ticket_supplier', 'ticket_amount'];
 
     try {
       const fieldsToUpdate = Object.keys(updateFields)

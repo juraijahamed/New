@@ -1,4 +1,4 @@
-import { TrendingUp, Activity, Target, Star, Download } from 'lucide-react';
+import { TrendingUp, Activity, Target, Star, Download, Calendar, CalendarDays } from 'lucide-react';
 import { motion } from 'framer-motion';
 import TransactionHistory from '../components/Reports/TransactionHistory';
 import { useData } from '../context/DataContext';
@@ -8,14 +8,21 @@ import { useRef, useState } from 'react';
 
 const Reports = () => {
     const { sales, isLoading } = useData();
+    const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly');
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
-    // Filter data based on selected month and year
-    const filteredSales = sales.filter((s) => {
-        const saleDate = new Date(s.date);
-        return saleDate.getMonth() === selectedMonth && saleDate.getFullYear() === selectedYear;
-    });
+    // Filter data based on selected view mode
+    const filteredSales = viewMode === 'monthly' 
+        ? sales.filter((s) => {
+            const saleDate = new Date(s.date);
+            return saleDate.getMonth() === selectedMonth && saleDate.getFullYear() === selectedYear;
+        })
+        : sales.filter((s) => {
+            const saleDate = new Date(s.date);
+            return saleDate.toISOString().split('T')[0] === selectedDate;
+        });
 
 
     // Calculate KPIs based on filtered data
@@ -30,16 +37,34 @@ const Reports = () => {
 
     const [isExporting, setIsExporting] = useState(false);
 
+    // Calculate MoM growth for monthly view, daily growth for daily view
     const getPrevMonthYear = (month: number, year: number) => {
         if (month === 0) return { month: 11, year: year - 1 };
         return { month: month - 1, year };
     };
+    
+    const getPrevDay = (dateString: string) => {
+        const date = new Date(dateString);
+        date.setDate(date.getDate() - 1);
+        return date.toISOString().split('T')[0];
+    };
+
     const { month: prevMonth, year: prevYear } = getPrevMonthYear(selectedMonth, selectedYear);
+    const prevDay = getPrevDay(selectedDate);
+    
     const prevMonthSales = sales.filter((s) => {
         const d = new Date(s.date);
         return d.getMonth() === prevMonth && d.getFullYear() === prevYear;
     });
-    const prevTotalSales = prevMonthSales.reduce((sum, s) => sum + (s.sales_rate || 0), 0);
+    const prevDaySales = sales.filter((s) => {
+        const d = new Date(s.date);
+        return d.toISOString().split('T')[0] === prevDay;
+    });
+    
+    const prevTotalSales = viewMode === 'monthly' 
+        ? prevMonthSales.reduce((sum, s) => sum + (s.sales_rate || 0), 0)
+        : prevDaySales.reduce((sum, s) => sum + (s.sales_rate || 0), 0);
+    
     const momGrowth = (() => {
         if (prevTotalSales === 0) {
             return totalSales === 0 ? '0' : '+100';
@@ -150,8 +175,10 @@ const Reports = () => {
                 }
             }
 
-            const monthName = new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long' });
-            pdf.save(`Monthly_Report_${monthName}_${selectedYear}.pdf`);
+            const fileName = viewMode === 'monthly' 
+                ? `Monthly_Report_${new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long' })}_${selectedYear}.pdf`
+                : `Daily_Report_${selectedDate}.pdf`;
+            pdf.save(fileName);
         } catch (error) {
             console.error('Export failed:', error);
             alert('PDF export failed. Please check the console for details.');
@@ -179,26 +206,62 @@ const Reports = () => {
                     <p className="text-gray-500 mt-1">Detailed breakdown of your financial activities.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-100 shadow-sm">
-                        <select
-                            value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                            className="text-sm font-medium text-gray-700 outline-none bg-transparent"
+                    {/* View Mode Toggle */}
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-100 shadow-sm">
+                        <button
+                            onClick={() => setViewMode('monthly')}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'monthly' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
                         >
-                            {months.map((month, index) => (
-                                <option key={month} value={index}>{month}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={selectedYear}
-                            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                            className="text-sm font-medium text-gray-700 outline-none bg-transparent"
+                            <div className="flex items-center gap-2">
+                                <Calendar size={16} />
+                                Monthly
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setViewMode('daily')}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'daily' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
                         >
-                            {years.map((year) => (
-                                <option key={year} value={year}>{year}</option>
-                            ))}
-                        </select>
+                            <div className="flex items-center gap-2">
+                                <CalendarDays size={16} />
+                                Daily
+                            </div>
+                        </button>
                     </div>
+
+                    {/* Date Selection */}
+                    {viewMode === 'monthly' ? (
+                        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-100 shadow-sm">
+                            <select
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                className="text-sm font-medium text-gray-700 outline-none bg-transparent"
+                            >
+                                {months.map((month, index) => (
+                                    <option key={month} value={index}>{month}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                className="text-sm font-medium text-gray-700 outline-none bg-transparent"
+                            >
+                                {years.map((year) => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+                        <div className="bg-white px-3 py-2 rounded-xl border border-gray-100 shadow-sm">
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                className="text-sm font-medium text-gray-700 outline-none bg-transparent"
+                                max={new Date().toISOString().split('T')[0]}
+                            />
+                        </div>
+                    )}
+
                     <button
                         onClick={handleExportPDF}
                         disabled={isExporting}
@@ -282,7 +345,12 @@ const Reports = () => {
                     </div>
 
                     {/* Transaction History */}
-                    <TransactionHistory filterMonth={selectedMonth} filterYear={selectedYear} />
+                    <TransactionHistory 
+                        filterMonth={viewMode === 'monthly' ? selectedMonth : undefined}
+                        filterYear={viewMode === 'monthly' ? selectedYear : undefined}
+                        filterDate={viewMode === 'daily' ? selectedDate : undefined}
+                        viewMode={viewMode}
+                    />
                 </div>
             </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, CreditCard, LayoutList, FileText } from 'lucide-react';
+import { PlusCircle, Loader2, CreditCard, LayoutList, FileText, Calendar, CalendarDays } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import SupplierPaymentModal from '../components/Modals/SupplierPaymentModal';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
@@ -11,6 +11,7 @@ import { DocumentCell } from '../components/UI/DocumentCell';
 import { useSearchParams } from 'react-router-dom';
 import { fileUploadApi, type SupplierPayment } from '../services/api';
 import MonthlyStatement from '../components/Reports/MonthlyStatement';
+import DailyStatement from '../components/Reports/DailyStatement';
 
 import config from '../config';
 
@@ -20,6 +21,7 @@ const SupplierPayments = () => {
     const highlightId = searchParams.get('highlightId');
     const highlightKey = searchParams.get('highlightKey');
     const [activeTab, setActiveTab] = useState<'transactions' | 'statement'>('transactions');
+    const [statementView, setStatementView] = useState<'monthly' | 'daily'>('monthly');
 
     // Strict ID Ascending sort for a cleaner "series" view (1, 2, 3...)
     const sortedPayments = useMemo(() => {
@@ -137,6 +139,90 @@ const SupplierPayments = () => {
                     />
                 ),
             },
+            {
+                accessorKey: 'bus_supplier',
+                header: 'Bus Supplier',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.bus_supplier}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { bus_supplier: val as string });
+                        }}
+                        className="text-xs text-gray-600"
+                    />
+                ),
+            },
+            {
+                accessorKey: 'bus_amount',
+                header: 'Bus Amount',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.bus_amount}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { bus_amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => val ? `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'}
+                        className="font-mono text-green-600 text-xs"
+                    />
+                ),
+            },
+            {
+                accessorKey: 'visa_supplier',
+                header: 'Visa Supplier',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.visa_supplier}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { visa_supplier: val as string });
+                        }}
+                        className="text-xs text-gray-600"
+                    />
+                ),
+            },
+            {
+                accessorKey: 'visa_amount',
+                header: 'Visa Amount',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.visa_amount}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { visa_amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => val ? `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'}
+                        className="font-mono text-purple-600 text-xs"
+                    />
+                ),
+            },
+            {
+                accessorKey: 'ticket_supplier',
+                header: 'Ticket Supplier',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.ticket_supplier}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { ticket_supplier: val as string });
+                        }}
+                        className="text-xs text-gray-600"
+                    />
+                ),
+            },
+            {
+                accessorKey: 'ticket_amount',
+                header: 'Ticket Amount',
+                cell: ({ row }) => (
+                    <EditableCell
+                        value={row.original.ticket_amount}
+                        onSave={async (val) => {
+                            await updateSupplierPayment(row.original.id!, { ticket_amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
+                        }}
+                        type="number"
+                        formatDisplay={(val) => val ? `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'}
+                        className="font-mono text-orange-600 text-xs"
+                    />
+                ),
+            },
         ],
         []
     );
@@ -180,7 +266,7 @@ const SupplierPayments = () => {
                             }`}
                         >
                             <FileText size={16} />
-                            Monthly Statement
+                            Statement
                         </button>
                     </div>
                 </div>

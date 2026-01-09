@@ -293,6 +293,41 @@ async function initSchema() {
     console.error('Error ensuring total_amount on salary_payments:', err);
   }
 
+  // Add supplier type columns to supplier_payments table (bus_supplier, visa_supplier, ticket_supplier)
+  try {
+    const busSupplierCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='supplier_payments' AND column_name='bus_supplier'
+    `);
+    if (busSupplierCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE supplier_payments ADD COLUMN bus_supplier TEXT');
+      await pool.query('ALTER TABLE supplier_payments ADD COLUMN bus_amount DOUBLE PRECISION');
+    }
+
+    const visaSupplierCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='supplier_payments' AND column_name='visa_supplier'
+    `);
+    if (visaSupplierCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE supplier_payments ADD COLUMN visa_supplier TEXT');
+      await pool.query('ALTER TABLE supplier_payments ADD COLUMN visa_amount DOUBLE PRECISION');
+    }
+
+    const ticketSupplierCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='supplier_payments' AND column_name='ticket_supplier'
+    `);
+    if (ticketSupplierCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE supplier_payments ADD COLUMN ticket_supplier TEXT');
+      await pool.query('ALTER TABLE supplier_payments ADD COLUMN ticket_amount DOUBLE PRECISION');
+    }
+  } catch (err) {
+    console.error('Error adding supplier type columns to supplier_payments:', err);
+  }
+
   // Cleanup: Remove existing duplicates before seeding
   try {
     await pool.query(`
@@ -339,16 +374,15 @@ async function initSchema() {
     'Insurance',
   ];
   const defaultNationalities = [
-    'Indian', 'Pakistani', 'Filipino', 'Bangladeshi', 'Egyptian',
-    'British', 'American', 'Emirati', 'Saudi', 'Jordanian',
-    'Lebanese', 'Syrian', 'Sudanese', 'Nepali', 'Sri Lankan', 'Chinese',
+    'Indian', 'Pakistani', 'Filipino', 'Egyptian',
+    'British', 'American', 'Emirati', 'Saudi',
+    'Syrian', 'Chinese',
   ];
   const defaultCategories = [
     'Office Supplies',
     'Utilities',
     'Travel',
     'Marketing',
-    'Software',
     'Equipment',
     'Rent',
   ];
@@ -356,16 +390,35 @@ async function initSchema() {
     'Manager',
     'Travel Agent',
     'Accountant',
-    'IT Support',
     'HR',
     'Driver',
-    'PRO',
   ];
 
   await seedOptions('service', defaultServices);
   await seedOptions('nationality', defaultNationalities);
   await seedOptions('category', defaultCategories);
   await seedOptions('position', defaultPositions);
+
+  // Explicit cleanup of deprecated options
+  try {
+    await pool.query(`
+      DELETE FROM dropdown_options 
+      WHERE type = 'nationality' 
+        AND value IN ('Bangladeshi','Jordanian','Lebanese','Sudanese','Nepali','Sri Lankan')
+    `);
+    await pool.query(`
+      DELETE FROM dropdown_options 
+      WHERE type = 'category' 
+        AND value = 'Software'
+    `);
+    await pool.query(`
+      DELETE FROM dropdown_options 
+      WHERE type = 'position' 
+        AND value IN ('IT Support','PRO')
+    `);
+  } catch (err) {
+    console.error('Error cleaning up deprecated dropdown options:', err);
+  }
   } catch (error) {
     console.error('Error initializing database schema:', error);
     throw error;

@@ -138,6 +138,12 @@ export interface SupplierPayment {
     updated_by?: string;
     created_at?: string;
     updated_at?: string;
+    bus_supplier?: string;
+    bus_amount?: number;
+    visa_supplier?: string;
+    visa_amount?: number;
+    ticket_supplier?: string;
+    ticket_amount?: number;
 }
 
 export const supplierPaymentsApi = {

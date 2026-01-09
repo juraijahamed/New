@@ -153,21 +153,20 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
 
                 // Wait for scroll/render
                 setTimeout(() => {
-                    // Start Animation
-                    const columnCells = document.querySelectorAll(`[data-cell-id$="-${colIndex}"]`);
-                    // Note: In virtualized table, only visible cells will be selected
-                    columnCells.forEach((cell) => {
-                        cell.classList.add('animate-cue-shining');
-                    });
+                    // Start Animation on entire row (row-wise blinking)
+                    const targetRow = document.querySelector(`[data-row-id="${rowId}"]`);
+                    if (targetRow) {
+                        targetRow.classList.add('animate-row-blink');
+                    }
 
                     // Set as selected cell for focus
                     setSelectedCell({ row: rowIndex, col: colIndex });
 
                     // Remove effect after animation completes
                     setTimeout(() => {
-                        columnCells.forEach((cell) => {
-                            cell.classList.remove('animate-cue-shining');
-                        });
+                        if (targetRow) {
+                            targetRow.classList.remove('animate-row-blink');
+                        }
                     }, 2500);
                 }, useVirtualization ? 500 : 300); // Slightly longer wait for virtualization
             }
@@ -238,6 +237,7 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
                         visibleRows.map((row) => (
                             <tr
                                 key={row.id}
+                                data-row-id={(row.original as any).id}
                                 className="transition-colors"
                                 style={{
                                     background: row.index % 2 === 0 ? '#ffffff' : '#fdf9f3',

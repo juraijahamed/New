@@ -1,13 +1,28 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Receipt, ShoppingCart, CreditCard, BarChart2, Settings, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import GlobalSearchModal from '../Modals/GlobalSearchModal';
 
 const Sidebar = () => {
     const location = useLocation();
     const [hoveredItem, setHoveredItem] = useState<string | null>(null);
     const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+
+    // Add Ctrl+K keyboard shortcut for search
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                setIsSearchModalOpen(true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, []);
 
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/UI/DataTable';
-import { PlusCircle, Loader2, BarChart3, LayoutList, FileText } from 'lucide-react';
+import { PlusCircle, Loader2, BarChart3, LayoutList, FileText, Calendar, CalendarDays } from 'lucide-react';
 import FilePreviewModal from '../components/Modals/FilePreviewModal';
 import { useData } from '../context/DataContext';
 import SaleModal from '../components/Modals/SaleModal';
@@ -11,6 +11,7 @@ import { DocumentCell } from '../components/UI/DocumentCell';
 import { useSearchParams } from 'react-router-dom';
 import { fileUploadApi, type Sale } from '../services/api';
 import MonthlyStatement from '../components/Reports/MonthlyStatement';
+import DailyStatement from '../components/Reports/DailyStatement';
 
 import config from '../config';
 
@@ -20,6 +21,7 @@ const Sales = () => {
     const highlightId = searchParams.get('highlightId');
     const highlightKey = searchParams.get('highlightKey');
     const [activeTab, setActiveTab] = useState<'transactions' | 'statement'>('transactions');
+    const [statementView, setStatementView] = useState<'monthly' | 'daily'>('monthly');
 
     // Strict ID Ascending sort for a cleaner "series" view (1, 2, 3...)
     const sortedSales = useMemo(() => {
@@ -104,15 +106,25 @@ const Sales = () => {
                 accessorKey: 'service',
                 header: 'Service',
                 size: 100,
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.service}
-                        onSave={async (val) => {
-                            await updateSale(row.original.id!, { service: val as string });
-                        }}
-                        className="text-gray-700 text-xs"
-                    />
-                ),
+                cell: ({ row }) => {
+                    const service = row.original.service;
+                    
+                    if (service === 'A2A') {
+                        return (
+                            <div className="px-3 py-1 rounded-lg inline-flex bg-blue-600 text-white font-semibold text-xs font-medium">
+                                {service}
+                            </div>
+                        );
+                    } else if (service === 'B2B') {
+                        return (
+                            <div className="px-3 py-1 rounded-lg inline-flex bg-purple-600 text-white font-semibold text-xs font-medium">
+                                {service}
+                            </div>
+                        );
+                    }
+                    
+                    return <span className="text-gray-700 text-xs">{service}</span>;
+                },
             },
             {
                 accessorKey: 'bus_ticket_supplier',
@@ -307,7 +319,7 @@ const Sales = () => {
                             }`}
                         >
                             <FileText size={16} />
-                            Monthly Statement
+                            Statement
                         </button>
                     </div>
                 </div>
@@ -327,6 +339,28 @@ const Sales = () => {
                             >
                                 <PlusCircle size={20} />
                                 New Sale
+                            </button>
+                        </div>
+                    )}
+                    {activeTab === 'statement' && (
+                        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-100 shadow-sm">
+                            <button
+                                onClick={() => setStatementView('monthly')}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${statementView === 'monthly' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Calendar size={16} />
+                                    Monthly
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => setStatementView('daily')}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${statementView === 'daily' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <CalendarDays size={16} />
+                                    Daily
+                                </div>
                             </button>
                         </div>
                     )}
@@ -354,8 +388,10 @@ const Sales = () => {
                             />
                         </div>
                     )
-                ) : (
+                ) : statementView === 'monthly' ? (
                     <MonthlyStatement data={sales} type="agency" />
+                ) : (
+                    <DailyStatement data={sales} type="agency" />
                 )}
             </div>
 
