@@ -21,65 +21,155 @@ interface AggregatedData {
 const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
     const [selectedDate, setSelectedDate] = useState(new Date());
 
+    // Debug: Check what data we're receiving
+    if (type === 'supplier' && data.length > 0) {
+        console.log(`[MonthlyStatement] Supplier statement received ${data.length} items:`, data);
+    }
+
     const aggregatedData = useMemo(() => {
-        const filteredData = data.filter(item => {
-            const itemDate = new Date(item.date);
-            return (
-                itemDate.getMonth() === selectedDate.getMonth() &&
-                itemDate.getFullYear() === selectedDate.getFullYear()
-            );
+        if (type === 'supplier') {
+            console.log('[MonthlyStatement] Starting aggregation for supplier type');
+            console.log('[MonthlyStatement] Total data items received:', data.length);
+            console.log('[MonthlyStatement] Selected date:', selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+            console.log('[MonthlyStatement] Raw data:', data);
+        }
+        
+        // Split data into sales and supplier payments
+        const sales: Sale[] = [];
+        const supplierPayments: SupplierPayment[] = [];
+        data.forEach(item => {
+            if ((item as any).supplier_name !== undefined) {
+                supplierPayments.push(item as SupplierPayment);
+            } else if ((item as any).agency !== undefined) {
+                sales.push(item as Sale);
+            }
         });
 
+        if (type === 'supplier') {
+            console.log('[MonthlyStatement] Split results - Supplier Payments:', supplierPayments.length, 'Sales:', sales.length);
+        }
+
+        // Filter by selected month/year
+        const month = selectedDate.getMonth();
+        const year = selectedDate.getFullYear();
+        const filteredPayments = supplierPayments.filter(p => {
+            const d = new Date(p.date);
+            return d.getMonth() === month && d.getFullYear() === year;
+        });
+        const filteredSales = sales.filter(s => {
+            const d = new Date(s.date);
+            return d.getMonth() === month && d.getFullYear() === year;
+        });
+
+        if (type === 'supplier') {
+            console.log('[MonthlyStatement] Filtered results - Payments:', filteredPayments.length, 'Sales:', filteredSales.length);
+            console.log('[MonthlyStatement] Filtered Payments:', filteredPayments);
+            console.log('[MonthlyStatement] Filtered Sales:', filteredSales);
+        }
+
+        // Build unified supplier set
+        const supplierSet = new Set<string>();
+        
+        // Add suppliers from supplier payments
+        filteredPayments.forEach(p => {
+            if (p.supplier_name && p.supplier_name.trim()) supplierSet.add(p.supplier_name.trim());
+        });
+        
+        // Add suppliers from sales (from all supplier fields)
+        filteredSales.forEach(s => {
+            if (s.supplier && s.supplier.trim()) supplierSet.add(s.supplier.trim());
+            if (s.bus_supplier && s.bus_supplier.trim()) supplierSet.add(s.bus_supplier.trim());
+            if (s.visa_supplier && s.visa_supplier.trim()) supplierSet.add(s.visa_supplier.trim());
+            if (s.ticket_supplier && s.ticket_supplier.trim()) supplierSet.add(s.ticket_supplier.trim());
+        });
+
+        if (type === 'supplier') {
+            console.log('[MonthlyStatement] Unified supplier set:', Array.from(supplierSet));
+        }
+
+        // Aggregate amounts for each supplier
         const groups: { [key: string]: AggregatedData } = {};
+        supplierSet.forEach(name => {
+            groups[name] = {
+                name,
+                count: 0,
+                totalAmount: 0,
+                pendingCount: 0,
+                pendingAmount: 0,
+            };
+        });
 
-        filteredData.forEach(item => {
-            const name = type === 'agency' 
-                ? (item as Sale).agency 
-                : (item as SupplierPayment).supplier_name;
-            
-            // Skip if name is empty
-            if (!name) return;
-
-            if (!groups[name]) {
-                groups[name] = {
-                    name,
-                    count: 0,
-                    totalAmount: 0,
-                    totalProfit: type === 'agency' ? 0 : undefined,
-                    pendingCount: 0,
-                    pendingAmount: 0,
-                    pendingProfit: type === 'agency' ? 0 : undefined,
-                };
-            }
-
-            const isPending = item.status === 'pending';
-
+        // Add supplier payments
+        filteredPayments.forEach(p => {
+            const name = p.supplier_name?.trim();
+            if (!name || !groups[name]) return;
+            const isPending = p.status === 'pending';
             if (isPending) {
-                groups[name].pendingCount = (groups[name].pendingCount || 0) + 1;
+                groups[name].pendingCount += 1;
+                groups[name].pendingAmount += p.amount || 0;
             } else {
                 groups[name].count += 1;
+                groups[name].totalAmount += p.amount || 0;
+            }
+        });
+
+        // Add sales with all supplier fields
+        filteredSales.forEach(s => {
+            const isPending = s.status === 'pending';
+            
+            // Process main supplier
+            if (s.supplier && s.supplier.trim() && groups[s.supplier.trim()]) {
+                if (isPending) {
+                    groups[s.supplier.trim()].pendingCount += 1;
+                    groups[s.supplier.trim()].pendingAmount += s.net_rate || 0;
+                } else {
+                    groups[s.supplier.trim()].count += 1;
+                    groups[s.supplier.trim()].totalAmount += s.net_rate || 0;
+                }
             }
             
-            if (type === 'agency') {
-                const sale = item as Sale;
+            // Process bus supplier
+            if (s.bus_supplier && s.bus_supplier.trim() && groups[s.bus_supplier.trim()]) {
                 if (isPending) {
-                    groups[name].pendingAmount = (groups[name].pendingAmount || 0) + (sale.sales_rate || 0);
-                    groups[name].pendingProfit = (groups[name].pendingProfit || 0) + (sale.profit || 0);
+                    groups[s.bus_supplier.trim()].pendingCount += 1;
+                    groups[s.bus_supplier.trim()].pendingAmount += s.net_rate || 0;
                 } else {
-                    groups[name].totalAmount += sale.sales_rate || 0;
-                    groups[name].totalProfit = (groups[name].totalProfit || 0) + (sale.profit || 0);
+                    groups[s.bus_supplier.trim()].count += 1;
+                    groups[s.bus_supplier.trim()].totalAmount += s.net_rate || 0;
                 }
-            } else {
-                const payment = item as SupplierPayment;
+            }
+            
+            // Process visa supplier
+            if (s.visa_supplier && s.visa_supplier.trim() && groups[s.visa_supplier.trim()]) {
                 if (isPending) {
-                    groups[name].pendingAmount = (groups[name].pendingAmount || 0) + (payment.amount || 0);
+                    groups[s.visa_supplier.trim()].pendingCount += 1;
+                    groups[s.visa_supplier.trim()].pendingAmount += s.net_rate || 0;
                 } else {
-                    groups[name].totalAmount += payment.amount || 0;
+                    groups[s.visa_supplier.trim()].count += 1;
+                    groups[s.visa_supplier.trim()].totalAmount += s.net_rate || 0;
+                }
+            }
+            
+            // Process ticket supplier
+            if (s.ticket_supplier && s.ticket_supplier.trim() && groups[s.ticket_supplier.trim()]) {
+                if (isPending) {
+                    groups[s.ticket_supplier.trim()].pendingCount += 1;
+                    groups[s.ticket_supplier.trim()].pendingAmount += s.net_rate || 0;
+                } else {
+                    groups[s.ticket_supplier.trim()].count += 1;
+                    groups[s.ticket_supplier.trim()].totalAmount += s.net_rate || 0;
                 }
             }
         });
 
-        return Object.values(groups).sort((a, b) => b.totalAmount - a.totalAmount);
+        const result = Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
+        
+        if (type === 'supplier') {
+            console.log('[MonthlyStatement] Final aggregated data:', result);
+            console.log('[MonthlyStatement] Total suppliers:', result.length);
+        }
+        
+        return result;
     }, [data, selectedDate, type]);
 
     const totals = useMemo(() => {
@@ -280,8 +370,20 @@ const MonthlyStatement: React.FC<MonthlyStatementProps> = ({ data, type }) => {
                     <tbody className="divide-y divide-gray-200">
                         {aggregatedData.length === 0 ? (
                             <tr>
-                                <td colSpan={type === 'agency' ? 6 : 5} className="px-6 py-12 text-center text-gray-400">
-                                    No transactions found for this month
+                                <td colSpan={type === 'agency' ? 6 : 5} className="px-6 py-12 text-center">
+                                    <div className="text-gray-400">
+                                        <p className="text-base mb-2">No transactions found for this month</p>
+                                        {type === 'supplier' && data.length === 0 && (
+                                            <p className="text-sm text-gray-500 mt-3">
+                                                Data will appear here when you add supplier payments or sales with suppliers specified.
+                                            </p>
+                                        )}
+                                        {type === 'supplier' && data.length > 0 && (
+                                            <p className="text-sm text-gray-500 mt-3">
+                                                No data for {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}. Try navigating to a different month.
+                                            </p>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ) : (

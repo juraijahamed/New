@@ -77,6 +77,9 @@ export interface Sale {
     bus_supplier?: string;
     visa_supplier?: string;
     ticket_supplier?: string;
+    bus_supplier_cost?: number;
+    visa_supplier_cost?: number;
+    ticket_supplier_cost?: number;
 }
 
 export const salesApi = {

@@ -5,6 +5,7 @@ import {
     type ColumnDef,
 } from '@tanstack/react-table';
 import React, { useState, useRef, useEffect } from 'react';
+import { Search, X, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface DataTableProps<TData> {
     columns: ColumnDef<TData>[];
@@ -20,6 +21,13 @@ interface DataTableProps<TData> {
 export function DataTable<TData>({ columns, data, compact = false, highlightInfo, onEdit }: DataTableProps<TData>) {
     const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
     const [copiedCell, setCopiedCell] = useState<{ row: number; col: number } | null>(null);
+
+    // Find/Search State
+    const [isFindOpen, setIsFindOpen] = useState(false);
+    const [findTerm, setFindTerm] = useState('');
+    const [findResults, setFindResults] = useState<Array<{ row: number; col: number; text: string }>>([]);
+    const [currentResultIndex, setCurrentResultIndex] = useState(0);
+    const findInputRef = useRef<HTMLInputElement>(null);
 
     // Virtualization State
     const containerRef = useRef<HTMLDivElement>(null);
@@ -53,6 +61,30 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
     // Handle Copy
     useEffect(() => {
         const handleKeyDown = async (e: KeyboardEvent) => {
+            // Handle Ctrl+F / Cmd+F for find
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                setIsFindOpen(true);
+                setTimeout(() => findInputRef.current?.focus(), 0);
+                return;
+            }
+
+            // Handle Escape to close find
+            if (e.key === 'Escape' && isFindOpen) {
+                setIsFindOpen(false);
+                setFindTerm('');
+                setFindResults([]);
+                return;
+            }
+
+            // Handle Enter in find to go to next result
+            if (e.key === 'Enter' && isFindOpen && findResults.length > 0) {
+                e.preventDefault();
+                setCurrentResultIndex((prev) => (prev + 1) % findResults.length);
+                return;
+            }
+
+            // Handle Ctrl+C for copy
             if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCell) {
                 e.preventDefault();
                 // Find the cell element using absolute index
@@ -86,7 +118,67 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedCell]);
+    }, [selectedCell, isFindOpen, findResults.length]);
+
+    // Handle Find Search
+    useEffect(() => {
+        if (!isFindOpen || !findTerm.trim()) {
+            setFindResults([]);
+            setCurrentResultIndex(0);
+            return;
+        }
+
+        const results: Array<{ row: number; col: number; text: string }> = [];
+        const searchTerm = findTerm.toLowerCase();
+
+        // Search through all visible data
+        data.forEach((row, rowIndex) => {
+            columns.forEach((col, colIndex) => {
+                const accessorKey = (col as any).accessorKey;
+                if (accessorKey) {
+                    const cellValue = String((row as any)[accessorKey] || '').toLowerCase();
+                    if (cellValue.includes(searchTerm)) {
+                        results.push({
+                            row: rowIndex,
+                            col: colIndex,
+                            text: cellValue
+                        });
+                    }
+                }
+            });
+        });
+
+        setFindResults(results);
+        setCurrentResultIndex(0);
+
+        // Auto-scroll to first result
+        if (results.length > 0) {
+            setTimeout(() => {
+                const cellElement = document.querySelector(
+                    `[data-cell-id="${results[0].row}-${results[0].col}"]`
+                );
+                if (cellElement) {
+                    cellElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+    }, [findTerm, isFindOpen, data, columns]);
+
+    // Auto-navigate to current find result
+    useEffect(() => {
+        if (findResults.length === 0) return;
+
+        const currentResult = findResults[currentResultIndex];
+        const cellElement = document.querySelector(
+            `[data-cell-id="${currentResult.row}-${currentResult.col}"]`
+        );
+
+        if (cellElement) {
+            // Highlight the current result
+            cellElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setSelectedCell({ row: currentResult.row, col: currentResult.col });
+        }
+    }, [currentResultIndex, findResults]);
 
     const table = useReactTable({
         data,
@@ -248,6 +340,12 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
                                     const rowIndex = row.index; // Use absolute index
                                     const isSelected = selectedCell?.row === rowIndex && selectedCell?.col === colIndex;
                                     const isCopied = copiedCell?.row === rowIndex && copiedCell?.col === colIndex;
+                                    
+                                    // Check if this cell is a find result
+                                    const isFindResult = findResults.some(r => r.row === rowIndex && r.col === colIndex);
+                                    const isCurrentFindResult = isFindResult && 
+                                        findResults[currentResultIndex]?.row === rowIndex && 
+                                        findResults[currentResultIndex]?.col === colIndex;
 
                                     const isIdColumn = (cell.column.columnDef as any)?.accessorKey === 'id' ||
                                         String((cell.column.columnDef as any)?.header).toLowerCase() === 'id';
@@ -287,9 +385,9 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
                                                 borderRight: '1px solid #e0d5c7',
                                                 borderBottom: '1px solid #e0d5c7',
                                                 cursor: 'cell',
-                                                outline: isCopied ? '2px solid #22c55e' : (isSelected ? '2px solid #DAA520' : 'none'),
+                                                outline: isCopied ? '2px solid #22c55e' : (isCurrentFindResult ? '2px solid #EF4444' : (isSelected ? '2px solid #DAA520' : 'none')),
                                                 outlineOffset: '-2px',
-                                                background: isCopied ? 'rgba(34, 197, 94, 0.2)' : (isSelected ? 'rgba(218, 165, 32, 0.15)' : undefined),
+                                                background: isCopied ? 'rgba(34, 197, 94, 0.2)' : (isCurrentFindResult ? 'rgba(239, 68, 68, 0.25)' : (isFindResult ? 'rgba(239, 68, 68, 0.1)' : (isSelected ? 'rgba(218, 165, 32, 0.15)' : undefined))),
                                                 color: '#5D4037',
                                                 userSelect: 'none', // Prevent native text selection to use ours
                                                 transition: 'background-color 0.2s, outline-color 0.2s',
@@ -321,6 +419,68 @@ export function DataTable<TData>({ columns, data, compact = false, highlightInfo
                     )}
                 </tbody>
             </table>
+
+            {/* Find Bar */}
+            {isFindOpen && (
+                <div className="absolute bottom-0 left-0 right-0 bg-white border-t-2 border-amber-200 shadow-lg p-3 flex items-center gap-2">
+                    <Search size={18} className="text-gray-500" />
+                    <input
+                        ref={findInputRef}
+                        type="text"
+                        value={findTerm}
+                        onChange={(e) => setFindTerm(e.target.value)}
+                        placeholder="Find in table... (Ctrl+F)"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                        autoFocus
+                    />
+                    <div className="text-sm text-gray-600 whitespace-nowrap px-2">
+                        {findResults.length > 0 ? (
+                            <span>
+                                <span className="font-semibold">{currentResultIndex + 1}</span>
+                                {' '}/{' '}
+                                <span className="font-semibold">{findResults.length}</span>
+                            </span>
+                        ) : findTerm ? (
+                            <span className="text-red-500">No matches</span>
+                        ) : (
+                            <span>Type to search...</span>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => {
+                            if (findResults.length > 0) {
+                                setCurrentResultIndex((prev) => (prev - 1 + findResults.length) % findResults.length);
+                            }
+                        }}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        title="Previous match (Shift+Enter)"
+                    >
+                        <ChevronUp size={18} className="text-gray-600" />
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (findResults.length > 0) {
+                                setCurrentResultIndex((prev) => (prev + 1) % findResults.length);
+                            }
+                        }}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        title="Next match (Enter)"
+                    >
+                        <ChevronDown size={18} className="text-gray-600" />
+                    </button>
+                    <button
+                        onClick={() => {
+                            setIsFindOpen(false);
+                            setFindTerm('');
+                            setFindResults([]);
+                        }}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        title="Close find (Escape)"
+                    >
+                        <X size={18} className="text-gray-600" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

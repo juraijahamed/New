@@ -39,6 +39,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
         bus_supplier: '',
         visa_supplier: '',
         ticket_supplier: '',
+        bus_supplier_cost: '',
+        visa_supplier_cost: '',
+        ticket_supplier_cost: '',
     });
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
@@ -88,6 +91,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 bus_supplier: sale.bus_supplier || '',
                 visa_supplier: sale.visa_supplier || '',
                 ticket_supplier: sale.ticket_supplier || '',
+                bus_supplier_cost: sale.bus_supplier_cost ? String(sale.bus_supplier_cost) : '',
+                visa_supplier_cost: sale.visa_supplier_cost ? String(sale.visa_supplier_cost) : '',
+                ticket_supplier_cost: sale.ticket_supplier_cost ? String(sale.ticket_supplier_cost) : '',
             });
 
             // Set custom values if not in list
@@ -117,6 +123,9 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 bus_supplier: '',
                 visa_supplier: '',
                 ticket_supplier: '',
+                bus_supplier_cost: '',
+                visa_supplier_cost: '',
+                ticket_supplier_cost: '',
             });
             setCustomService('');
             setCustomNationality('');
@@ -159,9 +168,12 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                 documents: documents,
                 remarks: formData.remarks,
                 status: 'draft',
-                bus_supplier: formData.bus_supplier || '',
-                visa_supplier: formData.visa_supplier || '',
-                ticket_supplier: formData.ticket_supplier || '',
+                    bus_supplier: formData.bus_supplier || '',
+                    visa_supplier: formData.visa_supplier || '',
+                    ticket_supplier: formData.ticket_supplier || '',
+                    bus_supplier_cost: parseFloat(formData.bus_supplier_cost) || 0,
+                    visa_supplier_cost: parseFloat(formData.visa_supplier_cost) || 0,
+                    ticket_supplier_cost: parseFloat(formData.ticket_supplier_cost) || 0,
             };
 
             if (sale?.id) {
@@ -270,19 +282,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                                 <option key={s} value={s}>{s}</option>
                             ))}
                         </select>
-                        {formData.service && (
-                            <div className="mt-2">
-                                {formData.service === 'A2A' ? (
-                                    <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-600 text-white">
-                                        ✈️ A2A
-                                    </span>
-                                ) : formData.service === 'B2B' ? (
-                                    <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white">
-                                        🚌 B2B
-                                    </span>
-                                ) : null}
-                            </div>
-                        )}
+                        {/* Service badge removed from form; coloring handled in table view */}
                     </div>
                 </div>
 
@@ -316,19 +316,37 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                         exit={{ opacity: 0, height: 0 }}
                         className="grid grid-cols-1 gap-4"
                     >
-                        <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
-                            <AutocompleteInput
-                                value={formData.visa_supplier}
-                                onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
-                                suggestions={suggestions.suppliers}
-                                placeholder="Visa supplier name"
-                                style={{
-                                    border: '2px solid #e8ddd0',
-                                    background: '#fdf9f3',
-                                    color: '#5D4037'
-                                }}
-                            />
+                        <div className="grid grid-cols-3 gap-3 items-end">
+                            <div className="col-span-2">
+                                <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
+                                <AutocompleteInput
+                                    value={formData.visa_supplier}
+                                    onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
+                                    suggestions={suggestions.suppliers}
+                                    placeholder="Visa supplier name"
+                                    onValueSelected={(value) => suggestions.addSupplier(value)}
+                                    style={{
+                                        border: '2px solid #e8ddd0',
+                                        background: '#fdf9f3',
+                                        color: '#5D4037'
+                                    }}
+                                />
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Cost (AED)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={formData.visa_supplier_cost}
+                                    onChange={(e) => setFormData({ ...formData, visa_supplier_cost: e.target.value })}
+                                    className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
+                                    style={inputStyle}
+                                    onFocus={(e) => (e.target.style.borderColor = '#DAA520')}
+                                    onBlur={(e) => (e.target.style.borderColor = '#e8ddd0')}
+                                    placeholder="0.00"
+                                />
+                            </div>
                         </div>
                     </motion.div>
                 )}
@@ -341,6 +359,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                             onChange={(value) => setFormData({ ...formData, agency: value })}
                             suggestions={suggestions.agencies}
                             placeholder="Agency name"
+                            onValueSelected={(value) => suggestions.addAgency(value)}
                             style={{
                                 border: '2px solid #e8ddd0',
                                 background: '#fdf9f3',
@@ -356,6 +375,7 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                             onChange={(value) => setFormData({ ...formData, client: value })}
                             suggestions={suggestions.agencies}
                             placeholder="Client name"
+                            onValueSelected={(value) => suggestions.addAgency(value)}
                             required
                             style={{
                                 border: '2px solid #e8ddd0',
@@ -375,32 +395,72 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                         className="grid grid-cols-2 gap-4"
                     >
                         <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Bus Supplier</label>
-                            <AutocompleteInput
-                                value={formData.bus_supplier}
-                                onChange={(value) => setFormData({ ...formData, bus_supplier: value })}
-                                suggestions={suggestions.suppliers}
-                                placeholder="Bus supplier name"
-                                style={{
-                                    border: '2px solid #e8ddd0',
-                                    background: '#fdf9f3',
-                                    color: '#5D4037'
-                                }}
-                            />
+                            <div className="grid grid-cols-3 gap-3 items-end">
+                                <div className="col-span-2">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Bus Supplier</label>
+                                    <AutocompleteInput
+                                        value={formData.bus_supplier}
+                                        onChange={(value) => setFormData({ ...formData, bus_supplier: value })}
+                                        suggestions={suggestions.suppliers}
+                                        placeholder="Bus supplier name"
+                                        onValueSelected={(value) => suggestions.addSupplier(value)}
+                                        style={{
+                                            border: '2px solid #e8ddd0',
+                                            background: '#fdf9f3',
+                                            color: '#5D4037'
+                                        }}
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Cost (AED)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.bus_supplier_cost}
+                                        onChange={(e) => setFormData({ ...formData, bus_supplier_cost: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
+                                        style={inputStyle}
+                                        onFocus={(e) => (e.target.style.borderColor = '#DAA520')}
+                                        onBlur={(e) => (e.target.style.borderColor = '#e8ddd0')}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
-                            <AutocompleteInput
-                                value={formData.visa_supplier}
-                                onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
-                                suggestions={suggestions.suppliers}
-                                placeholder="Visa supplier name"
-                                style={{
-                                    border: '2px solid #e8ddd0',
-                                    background: '#fdf9f3',
-                                    color: '#5D4037'
-                                }}
-                            />
+                            <div className="grid grid-cols-3 gap-3 items-end">
+                                <div className="col-span-2">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
+                                    <AutocompleteInput
+                                        value={formData.visa_supplier}
+                                        onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
+                                        suggestions={suggestions.suppliers}
+                                        placeholder="Visa supplier name"
+                                        onValueSelected={(value) => suggestions.addSupplier(value)}
+                                        style={{
+                                            border: '2px solid #e8ddd0',
+                                            background: '#fdf9f3',
+                                            color: '#5D4037'
+                                        }}
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Cost (AED)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.visa_supplier_cost}
+                                        onChange={(e) => setFormData({ ...formData, visa_supplier_cost: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
+                                        style={inputStyle}
+                                        onFocus={(e) => (e.target.style.borderColor = '#DAA520')}
+                                        onBlur={(e) => (e.target.style.borderColor = '#e8ddd0')}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </motion.div>
                 )}
@@ -414,32 +474,72 @@ const SaleModal: React.FC<SaleModalProps> = ({ isOpen, onClose, sale }) => {
                         className="grid grid-cols-2 gap-4"
                     >
                         <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Ticket Supplier</label>
-                            <AutocompleteInput
-                                value={formData.ticket_supplier}
-                                onChange={(value) => setFormData({ ...formData, ticket_supplier: value })}
-                                suggestions={suggestions.suppliers}
-                                placeholder="Ticket supplier name"
-                                style={{
-                                    border: '2px solid #e8ddd0',
-                                    background: '#fdf9f3',
-                                    color: '#5D4037'
-                                }}
-                            />
+                            <div className="grid grid-cols-3 gap-3 items-end">
+                                <div className="col-span-2">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Ticket Supplier</label>
+                                    <AutocompleteInput
+                                        value={formData.ticket_supplier}
+                                        onChange={(value) => setFormData({ ...formData, ticket_supplier: value })}
+                                        suggestions={suggestions.suppliers}
+                                        placeholder="Ticket supplier name"
+                                        onValueSelected={(value) => suggestions.addSupplier(value)}
+                                        style={{
+                                            border: '2px solid #e8ddd0',
+                                            background: '#fdf9f3',
+                                            color: '#5D4037'
+                                        }}
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Cost (AED)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.ticket_supplier_cost}
+                                        onChange={(e) => setFormData({ ...formData, ticket_supplier_cost: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
+                                        style={inputStyle}
+                                        onFocus={(e) => (e.target.style.borderColor = '#DAA520')}
+                                        onBlur={(e) => (e.target.style.borderColor = '#e8ddd0')}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
-                            <AutocompleteInput
-                                value={formData.visa_supplier}
-                                onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
-                                suggestions={suggestions.suppliers}
-                                placeholder="Visa supplier name"
-                                style={{
-                                    border: '2px solid #e8ddd0',
-                                    background: '#fdf9f3',
-                                    color: '#5D4037'
-                                }}
-                            />
+                            <div className="grid grid-cols-3 gap-3 items-end">
+                                <div className="col-span-2">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Visa Supplier</label>
+                                    <AutocompleteInput
+                                        value={formData.visa_supplier}
+                                        onChange={(value) => setFormData({ ...formData, visa_supplier: value })}
+                                        suggestions={suggestions.suppliers}
+                                        placeholder="Visa supplier name"
+                                        onValueSelected={(value) => suggestions.addSupplier(value)}
+                                        style={{
+                                            border: '2px solid #e8ddd0',
+                                            background: '#fdf9f3',
+                                            color: '#5D4037'
+                                        }}
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-sm font-medium mb-1" style={{ color: '#5D4037' }}>Cost (AED)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={formData.visa_supplier_cost}
+                                        onChange={(e) => setFormData({ ...formData, visa_supplier_cost: e.target.value })}
+                                        className="w-full px-3 py-2.5 rounded-xl text-sm transition-all focus:outline-none"
+                                        style={inputStyle}
+                                        onFocus={(e) => (e.target.style.borderColor = '#DAA520')}
+                                        onBlur={(e) => (e.target.style.borderColor = '#e8ddd0')}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </motion.div>
                 )}

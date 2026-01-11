@@ -8,6 +8,7 @@ interface AutocompleteInputProps {
     required?: boolean;
     className?: string;
     style?: React.CSSProperties;
+    onValueSelected?: (value: string) => void;
 }
 
 const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
@@ -17,7 +18,8 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
     placeholder = '',
     required = false,
     className = '',
-    style = {}
+    style = {},
+    onValueSelected
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -86,6 +88,10 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
         onChange(suggestion);
         setIsOpen(false);
         setHighlightedIndex(-1);
+        // Call the onValueSelected callback if provided
+        if (onValueSelected) {
+            onValueSelected(suggestion);
+        }
         // Reset selection flag and keep dropdown closed
         setTimeout(() => setIsSelecting(false), 100);
         inputRef.current?.focus();

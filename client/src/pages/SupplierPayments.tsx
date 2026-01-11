@@ -9,14 +9,14 @@ import { StatusSelect } from '../components/UI/StatusSelect';
 import { EditableCell } from '../components/UI/EditableCell';
 import { DocumentCell } from '../components/UI/DocumentCell';
 import { useSearchParams } from 'react-router-dom';
-import { fileUploadApi, type SupplierPayment } from '../services/api';
+import { fileUploadApi, type SupplierPayment, type Sale } from '../services/api';
 import MonthlyStatement from '../components/Reports/MonthlyStatement';
 import DailyStatement from '../components/Reports/DailyStatement';
 
 import config from '../config';
 
 const SupplierPayments = () => {
-    const { supplierPayments, isLoading, updateSupplierPayment } = useData();
+    const { supplierPayments, sales, isLoading, updateSupplierPayment } = useData();
     const [searchParams] = useSearchParams();
     const highlightId = searchParams.get('highlightId');
     const highlightKey = searchParams.get('highlightKey');
@@ -27,6 +27,29 @@ const SupplierPayments = () => {
     const sortedPayments = useMemo(() => {
         return [...supplierPayments].sort((a, b) => (a.id || 0) - (b.id || 0));
     }, [supplierPayments]);
+
+    // Combine supplier payments with suppliers from sales table
+    const combinedStatementData = useMemo(() => {
+        const combinedData: (SupplierPayment | Sale)[] = [...supplierPayments];
+        
+        // Extract suppliers from all supplier fields in sales
+        const salesWithSuppliers: Sale[] = [];
+        sales.forEach(sale => {
+            // Check if sale has any supplier field populated
+            if (
+                (sale.supplier && sale.supplier.trim()) ||
+                (sale.bus_supplier && sale.bus_supplier.trim()) ||
+                (sale.visa_supplier && sale.visa_supplier.trim()) ||
+                (sale.ticket_supplier && sale.ticket_supplier.trim())
+            ) {
+                salesWithSuppliers.push(sale);
+            }
+        });
+        
+        combinedData.push(...salesWithSuppliers);
+        
+        return combinedData;
+    }, [supplierPayments, sales]);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
@@ -139,90 +162,6 @@ const SupplierPayments = () => {
                     />
                 ),
             },
-            {
-                accessorKey: 'bus_supplier',
-                header: 'Bus Supplier',
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.bus_supplier}
-                        onSave={async (val) => {
-                            await updateSupplierPayment(row.original.id!, { bus_supplier: val as string });
-                        }}
-                        className="text-xs text-gray-600"
-                    />
-                ),
-            },
-            {
-                accessorKey: 'bus_amount',
-                header: 'Bus Amount',
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.bus_amount}
-                        onSave={async (val) => {
-                            await updateSupplierPayment(row.original.id!, { bus_amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
-                        }}
-                        type="number"
-                        formatDisplay={(val) => val ? `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'}
-                        className="font-mono text-green-600 text-xs"
-                    />
-                ),
-            },
-            {
-                accessorKey: 'visa_supplier',
-                header: 'Visa Supplier',
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.visa_supplier}
-                        onSave={async (val) => {
-                            await updateSupplierPayment(row.original.id!, { visa_supplier: val as string });
-                        }}
-                        className="text-xs text-gray-600"
-                    />
-                ),
-            },
-            {
-                accessorKey: 'visa_amount',
-                header: 'Visa Amount',
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.visa_amount}
-                        onSave={async (val) => {
-                            await updateSupplierPayment(row.original.id!, { visa_amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
-                        }}
-                        type="number"
-                        formatDisplay={(val) => val ? `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'}
-                        className="font-mono text-purple-600 text-xs"
-                    />
-                ),
-            },
-            {
-                accessorKey: 'ticket_supplier',
-                header: 'Ticket Supplier',
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.ticket_supplier}
-                        onSave={async (val) => {
-                            await updateSupplierPayment(row.original.id!, { ticket_supplier: val as string });
-                        }}
-                        className="text-xs text-gray-600"
-                    />
-                ),
-            },
-            {
-                accessorKey: 'ticket_amount',
-                header: 'Ticket Amount',
-                cell: ({ row }) => (
-                    <EditableCell
-                        value={row.original.ticket_amount}
-                        onSave={async (val) => {
-                            await updateSupplierPayment(row.original.id!, { ticket_amount: typeof val === 'number' ? val : parseFloat(String(val)) || 0 });
-                        }}
-                        type="number"
-                        formatDisplay={(val) => val ? `AED ${(val as number).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '-'}
-                        className="font-mono text-orange-600 text-xs"
-                    />
-                ),
-            },
         ],
         []
     );
@@ -314,7 +253,7 @@ const SupplierPayments = () => {
                         </div>
                     )
                 ) : (
-                    <MonthlyStatement data={supplierPayments} type="supplier" />
+                    <MonthlyStatement data={combinedStatementData} type="supplier" />
                 )}
             </div>
 

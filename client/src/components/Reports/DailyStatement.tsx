@@ -68,7 +68,7 @@ const DailyStatement: React.FC<DailyStatementProps> = ({ data, type }) => {
             }
         });
 
-        return Object.values(groups).sort((a, b) => b.totalAmount - a.totalAmount);
+        return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
     }, [data, selectedDate, type]);
 
     const handleDateChange = (days: number) => {
