@@ -117,6 +117,73 @@ async function start() {
     console.log('Storage Mode: Local Disk (Warning: Files are ephemeral in App Runner)');
   }
 
+  // Helper function to recalculate agency payment status
+  async function recalculateAgencyPaymentStatus(agencyName) {
+    try {
+      // Get all pending sales for this agency
+      const pendingSales = await pool.query(`
+        SELECT id, sales_rate, received_amount FROM sales
+        WHERE agency = $1 AND status = 'pending'
+      `, [agencyName]);
+
+      if (pendingSales.rows.length === 0) {
+        return; // No pending sales to process
+      }
+
+      // Get total payments received for this agency
+      const totalReceivedResult = await pool.query(`
+        SELECT COALESCE(SUM(amount), 0) as total FROM agency_payments WHERE agency_name = $1
+      `, [agencyName]);
+
+      let remainingPayment = totalReceivedResult.rows[0].total;
+
+      // Sort sales by ID for consistent processing
+      const sales = pendingSales.rows.sort((a, b) => a.id - b.id);
+
+      for (const sale of sales) {
+        const outstandingAmount = (sale.sales_rate || 0) - (sale.received_amount || 0);
+
+        if (remainingPayment >= outstandingAmount) {
+          // Fully paid - update received_amount and status
+          await pool.query(`
+            UPDATE sales SET received_amount = sales_rate, status = 'credited', updated_at = NOW()
+            WHERE id = $1
+          `, [sale.id]);
+          remainingPayment -= outstandingAmount;
+        } else if (remainingPayment > 0) {
+          // Partially paid - update received_amount only
+          const newReceivedAmount = (sale.received_amount || 0) + remainingPayment;
+          await pool.query(`
+            UPDATE sales SET received_amount = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [newReceivedAmount, sale.id]);
+          remainingPayment = 0;
+        }
+        // If remainingPayment is 0, stop processing further sales
+        if (remainingPayment <= 0) break;
+      }
+
+      // Emit sale:updated events for all updated sales
+      const updatedSales = await pool.query(`
+        SELECT
+          s.*,
+          u1.name as created_by,
+          u2.name as updated_by
+        FROM sales s
+        LEFT JOIN users u1 ON s.created_by_user_id = u1.id
+        LEFT JOIN users u2 ON s.updated_by_user_id = u2.id
+        WHERE s.agency = $1 AND s.updated_at >= NOW() - INTERVAL '1 second'
+      `, [agencyName]);
+
+      for (const sale of updatedSales.rows) {
+        io.emit('sale:updated', sale);
+      }
+
+    } catch (error) {
+      console.error('Error recalculating agency payment status:', error);
+    }
+  }
+
   // ============ ROUTES ============
 
   // Health Check
@@ -400,7 +467,7 @@ async function start() {
   app.get('/api/sales', async (req, res) => {
     try {
       const result = await pool.query(`
-      SELECT 
+      SELECT
         s.id,
         s.date,
         s.agency,
@@ -416,9 +483,13 @@ async function start() {
         s.remarks,
         s.status,
         s.user_id,
+        s.received_amount,
         s.bus_supplier,
         s.visa_supplier,
         s.ticket_supplier,
+        s.bus_supplier_cost,
+        s.visa_supplier_cost,
+        s.ticket_supplier_cost,
         s.created_at,
         s.updated_at,
         s.created_by_user_id,
@@ -438,12 +509,12 @@ async function start() {
   });
 
   app.post('/api/sales', async (req, res) => {
-    const { date, agency, client, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, bus_supplier, visa_supplier, ticket_supplier } = req.body;
+    const { date, agency, client, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, bus_supplier, visa_supplier, ticket_supplier, bus_supplier_cost, visa_supplier_cost, ticket_supplier_cost } = req.body;
     try {
       const calculatedProfit = profit !== undefined ? profit : (sales_rate || 0) - (net_rate || 0);
       const inserted = await pool.query(
-        `INSERT INTO sales (date, agency, client, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, created_by_user_id, bus_supplier, visa_supplier, ticket_supplier)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        `INSERT INTO sales (date, agency, client, supplier, national, passport_number, service, net_rate, sales_rate, profit, documents, remarks, status, user_id, created_by_user_id, bus_supplier, visa_supplier, ticket_supplier, bus_supplier_cost, visa_supplier_cost, ticket_supplier_cost)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING *`,
         [
           date,
@@ -464,11 +535,14 @@ async function start() {
           bus_supplier || '',
           visa_supplier || '',
           ticket_supplier || '',
+          bus_supplier_cost || 0,
+          visa_supplier_cost || 0,
+          ticket_supplier_cost || 0,
         ]
       );
       // Fetch with user names
       const withNames = await pool.query(`
-      SELECT 
+      SELECT
         s.*,
         u1.name as created_by,
         u2.name as updated_by
@@ -478,6 +552,68 @@ async function start() {
       WHERE s.id = $1
     `, [inserted.rows[0].id]);
       const newSale = withNames.rows[0];
+
+      // Automatically create supplier payments for suppliers with costs
+      const supplierPayments = [];
+      if (bus_supplier && bus_supplier.trim() && (bus_supplier_cost || 0) > 0) {
+        supplierPayments.push({
+          supplier_name: bus_supplier.trim(),
+          amount: bus_supplier_cost || 0,
+          date: date,
+          remarks: `Bus supplier payment for sale #${newSale.id}`,
+          status: 'pending',
+          user_id: user_id || null
+        });
+      }
+      if (visa_supplier && visa_supplier.trim() && (visa_supplier_cost || 0) > 0) {
+        supplierPayments.push({
+          supplier_name: visa_supplier.trim(),
+          amount: visa_supplier_cost || 0,
+          date: date,
+          remarks: `Visa supplier payment for sale #${newSale.id}`,
+          status: 'pending',
+          user_id: user_id || null
+        });
+      }
+      if (ticket_supplier && ticket_supplier.trim() && (ticket_supplier_cost || 0) > 0) {
+        supplierPayments.push({
+          supplier_name: ticket_supplier.trim(),
+          amount: ticket_supplier_cost || 0,
+          date: date,
+          remarks: `Ticket supplier payment for sale #${newSale.id}`,
+          status: 'pending',
+          user_id: user_id || null
+        });
+      }
+
+      // Insert supplier payments
+      for (const payment of supplierPayments) {
+        try {
+          const paymentInserted = await pool.query(
+            `INSERT INTO supplier_payments (supplier_name, amount, date, remarks, status, user_id, created_by_user_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           RETURNING *`,
+            [payment.supplier_name, payment.amount, payment.date, payment.remarks, payment.status, payment.user_id, payment.user_id]
+          );
+          // Fetch with user names
+          const paymentWithNames = await pool.query(`
+            SELECT
+              sp.*,
+              u1.name as created_by,
+              u2.name as updated_by
+            FROM supplier_payments sp
+            LEFT JOIN users u1 ON sp.created_by_user_id = u1.id
+            LEFT JOIN users u2 ON sp.updated_by_user_id = u2.id
+            WHERE sp.id = $1
+          `, [paymentInserted.rows[0].id]);
+          // Broadcast supplier payment creation
+          io.emit('supplier_payment:created', paymentWithNames.rows[0]);
+        } catch (paymentError) {
+          console.error('Error creating supplier payment:', paymentError);
+          // Don't fail the sale creation if supplier payment creation fails
+        }
+      }
+
       // Broadcast to all connected clients
       io.emit('sale:created', newSale);
       res.json(newSale);
@@ -491,7 +627,7 @@ async function start() {
     const { id } = req.params;
     const updates = req.body;
     const { user_id, ...updateFields } = updates;
-    const validFields = ['date', 'agency', 'client', 'supplier', 'national', 'passport_number', 'service', 'net_rate', 'sales_rate', 'profit', 'documents', 'remarks', 'status', 'bus_supplier', 'visa_supplier', 'ticket_supplier'];
+    const validFields = ['date', 'agency', 'client', 'supplier', 'national', 'passport_number', 'service', 'net_rate', 'sales_rate', 'profit', 'documents', 'remarks', 'status', 'received_amount', 'bus_supplier', 'visa_supplier', 'ticket_supplier', 'bus_supplier_cost', 'visa_supplier_cost', 'ticket_supplier_cost'];
 
     try {
       // specific calculations if rates are updated
@@ -631,11 +767,249 @@ async function start() {
     }
   });
 
+  // ============ AGENCY PAYMENTS ============
+  app.get('/api/agency-payments', async (req, res) => {
+    try {
+      const result = await pool.query(`
+      SELECT
+        ap.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM agency_payments ap
+      LEFT JOIN users u1 ON ap.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON ap.updated_by_user_id = u2.id
+      ORDER BY COALESCE(ap.updated_at, ap.created_at) DESC, ap.date DESC
+    `);
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Get agency payments error:', error);
+      // Auto-recover if table was dropped
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "agency_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          const result = await pool.query(`
+            SELECT
+              ap.*,
+              u1.name as created_by,
+              u2.name as updated_by
+            FROM agency_payments ap
+            LEFT JOIN users u1 ON ap.created_by_user_id = u1.id
+            LEFT JOIN users u2 ON ap.updated_by_user_id = u2.id
+            ORDER BY COALESCE(ap.updated_at, ap.created_at) DESC, ap.date DESC
+          `);
+          return res.json(result.rows);
+        } catch (recoverErr) {
+          console.error('Recovery failed (agency_payments GET):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/agency-payments', async (req, res) => {
+    const { agency_name, amount, date, receipt_url, remarks, status, user_id } = req.body;
+    try {
+      const inserted = await pool.query(
+        `INSERT INTO agency_payments (agency_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+        [agency_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null]
+      );
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT
+        ap.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM agency_payments ap
+      LEFT JOIN users u1 ON ap.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON ap.updated_by_user_id = u2.id
+      WHERE ap.id = $1
+    `, [inserted.rows[0].id]);
+      const newPayment = withNames.rows[0];
+
+      // Check if total payments received for this agency equals or exceeds pending amount
+      // If so, update all pending sales for this agency to "credited"
+      const pendingSales = await pool.query(`
+        SELECT id, sales_rate FROM sales
+        WHERE agency = $1 AND status = 'pending'
+      `, [agency_name]);
+
+      if (pendingSales.rows.length > 0) {
+        const totalPendingAmount = pendingSales.rows.reduce((sum, sale) => sum + (sale.sales_rate || 0), 0);
+
+        const totalReceived = await pool.query(`
+          SELECT COALESCE(SUM(amount), 0) as total FROM agency_payments WHERE agency_name = $1
+        `, [agency_name]);
+
+        if (totalReceived.rows[0].total >= totalPendingAmount) {
+          // Update all pending sales for this agency to credited
+          await pool.query(`
+            UPDATE sales SET status = 'credited', updated_at = NOW()
+            WHERE agency = $1 AND status = 'pending'
+          `, [agency_name]);
+        }
+      }
+
+      // Broadcast to all connected clients
+      io.emit('agency_payment:created', newPayment);
+      res.json(newPayment);
+    } catch (error) {
+      console.error('Add agency payment error:', error);
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "agency_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          const inserted = await pool.query(
+            `INSERT INTO agency_payments (agency_name, amount, date, receipt_url, remarks, status, user_id, created_by_user_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           RETURNING *`,
+            [agency_name, amount, date, receipt_url || null, (remarks && remarks.trim()) || null, status || '', user_id || null, user_id || null]
+          );
+          const withNames = await pool.query(`
+            SELECT
+              ap.*,
+              u1.name as created_by,
+              u2.name as updated_by
+            FROM agency_payments ap
+            LEFT JOIN users u1 ON ap.created_by_user_id = u1.id
+            LEFT JOIN users u2 ON ap.updated_by_user_id = u2.id
+            WHERE ap.id = $1
+          `, [inserted.rows[0].id]);
+          const newPayment = withNames.rows[0];
+          io.emit('agency_payment:created', newPayment);
+          return res.json(newPayment);
+        } catch (recoverErr) {
+          console.error('Recovery failed (agency_payments POST):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put('/api/agency-payments/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+    const { user_id, ...updateFields } = updates;
+    const validFields = ['agency_name', 'amount', 'date', 'receipt_url', 'remarks', 'status'];
+
+    try {
+      // First get the original payment to recalculate status changes
+      const original = await pool.query('SELECT * FROM agency_payments WHERE id = $1', [id]);
+      const originalPayment = original.rows[0] || {};
+
+      const fieldsToUpdate = Object.keys(updateFields)
+        .filter(key => validFields.includes(key) && updateFields[key] !== undefined);
+
+      if (fieldsToUpdate.length === 0 && !user_id) {
+        return res.json({ id: Number(id), ...updates });
+      }
+
+      let setClause = fieldsToUpdate.map((field, idx) => `${field} = $${idx + 1}`).join(', ');
+      const values = fieldsToUpdate.map(field => {
+        if (field === 'remarks') return (updateFields[field] && updateFields[field].trim()) || null;
+        if (field === 'receipt_url') return updateFields[field] || null;
+        return updateFields[field];
+      });
+
+      // Add updated_by_user_id and updated_at if user_id is provided or if any field is being updated
+      if (user_id) {
+        if (setClause) setClause += ', ';
+        setClause += `updated_by_user_id = $${values.length + 1}`;
+        values.push(user_id);
+      }
+      // Always update updated_at when any field is updated
+      if (setClause) setClause += ', ';
+      setClause += `updated_at = NOW()`;
+
+      values.push(id);
+
+      const updated = await pool.query(
+        `UPDATE agency_payments SET ${setClause} WHERE id = $${values.length} RETURNING *`,
+        values
+      );
+
+      // Handle sales status updates based on payment changes
+      const updatedPayment = updated.rows[0];
+      const agencyName = updatedPayment.agency_name || originalPayment.agency_name;
+
+      // If the agency name changed or amount changed, we need to recalculate for both old and new agencies
+      const agenciesToRecalculate = new Set([agencyName]);
+      if (originalPayment.agency_name && originalPayment.agency_name !== agencyName) {
+        agenciesToRecalculate.add(originalPayment.agency_name);
+      }
+
+      for (const agency of agenciesToRecalculate) {
+        await recalculateAgencyPaymentStatus(agency);
+      }
+
+      // Fetch with user names
+      const withNames = await pool.query(`
+      SELECT
+        ap.*,
+        u1.name as created_by,
+        u2.name as updated_by
+      FROM agency_payments ap
+      LEFT JOIN users u1 ON ap.created_by_user_id = u1.id
+      LEFT JOIN users u2 ON ap.updated_by_user_id = u2.id
+      WHERE ap.id = $1
+    `, [id]);
+      const finalPayment = withNames.rows[0] || updatedPayment || { id: Number(id), ...updates };
+      // Broadcast to all connected clients
+      io.emit('agency_payment:updated', finalPayment);
+      res.json(finalPayment);
+    } catch (error) {
+      console.error('Update agency payment error:', error);
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "agency_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          return res.json({ id: Number(id), ...updates });
+        } catch (recoverErr) {
+          console.error('Recovery failed (agency_payments PUT):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete('/api/agency-payments/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await pool.query('DELETE FROM agency_payments WHERE id = $1', [id]);
+      // Broadcast to all connected clients
+      io.emit('agency_payment:deleted', { id: Number(id) });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete agency payment error:', error);
+      const isUndefinedTable =
+        error && (error.code === '42P01' || String(error.message || '').toLowerCase().includes('relation "agency_payments"'));
+      if (isUndefinedTable) {
+        try {
+          await initSchema();
+          // If table was missing, return success since the target row can't exist
+          return res.json({ success: true });
+        } catch (recoverErr) {
+          console.error('Recovery failed (agency_payments DELETE):', recoverErr);
+          return res.status(500).json({ error: recoverErr.message });
+        }
+      }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============ SUPPLIER PAYMENTS ============
   app.get('/api/supplier-payments', async (req, res) => {
     try {
       const result = await pool.query(`
-      SELECT 
+      SELECT
         sp.*,
         u1.name as created_by,
         u2.name as updated_by
@@ -654,7 +1028,7 @@ async function start() {
         try {
           await initSchema();
           const result = await pool.query(`
-            SELECT 
+            SELECT
               sp.*,
               u1.name as created_by,
               u2.name as updated_by

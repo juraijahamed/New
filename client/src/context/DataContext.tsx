@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import io from 'socket.io-client';
 import config from '../config';
 import {
-    expensesApi, salesApi, staffApi, supplierPaymentsApi, salaryPaymentsApi, dashboardApi, healthApi,
-    type Expense, type Sale, type Staff, type SupplierPayment, type SalaryPayment, type DashboardStats
+    expensesApi, salesApi, staffApi, supplierPaymentsApi, salaryPaymentsApi, agencyPaymentsApi, dashboardApi, healthApi,
+    type Expense, type Sale, type Staff, type SupplierPayment, type SalaryPayment, type AgencyPayment, type DashboardStats
 } from '../services/api';
 
 const socket = io(config.SOCKET_URL, {
@@ -26,6 +26,7 @@ interface DataContextType {
     staff: Staff[];
     supplierPayments: SupplierPayment[];
     salaryPayments: SalaryPayment[];
+    agencyPayments: AgencyPayment[];
     dashboardStats: DashboardStats | null;
 
     // Loading and Connection states
@@ -38,6 +39,7 @@ interface DataContextType {
     refreshStaff: () => Promise<void>;
     refreshSupplierPayments: () => Promise<void>;
     refreshSalaryPayments: () => Promise<void>;
+    refreshAgencyPayments: () => Promise<void>;
     refreshDashboard: () => Promise<void>;
     refreshAll: () => Promise<void>;
 
@@ -61,6 +63,10 @@ interface DataContextType {
     addSalaryPayment: (payment: Omit<SalaryPayment, 'id'>) => Promise<SalaryPayment>;
     updateSalaryPayment: (id: number, payment: Partial<SalaryPayment>) => Promise<void>;
     deleteSalaryPayment: (id: number) => Promise<void>;
+
+    addAgencyPayment: (payment: Omit<AgencyPayment, 'id'>) => Promise<AgencyPayment>;
+    updateAgencyPayment: (id: number, payment: Partial<AgencyPayment>) => Promise<void>;
+    deleteAgencyPayment: (id: number) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -71,6 +77,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [staff, setStaff] = useState<Staff[]>([]);
     const [supplierPayments, setSupplierPayments] = useState<SupplierPayment[]>([]);
     const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
+    const [agencyPayments, setAgencyPayments] = useState<AgencyPayment[]>([]);
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isServerOnline, setIsServerOnline] = useState(true);
@@ -83,16 +90,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     const refreshSales = useCallback(async () => {
-        const data = await salesApi.getAll();
-        // Convert null values to empty strings for the new fields to ensure proper display
-        const sanitizedData = data.map(sale => ({
-            ...sale,
-            client: sale.client || '',
-            bus_supplier: sale.bus_supplier || '',
-            visa_supplier: sale.visa_supplier || '',
-            ticket_supplier: sale.ticket_supplier || '',
-        }));
-        setSales(sanitizedData);
+        try {
+            const data = await salesApi.getAll();
+            // Convert null values to empty strings for the new fields to ensure proper display
+            const sanitizedData = data.map(sale => ({
+                ...sale,
+                client: sale.client || '',
+                bus_supplier: sale.bus_supplier || '',
+                visa_supplier: sale.visa_supplier || '',
+                ticket_supplier: sale.ticket_supplier || '',
+            }));
+            setSales(sanitizedData);
+        } catch (error) {
+            console.error('Failed to refresh sales:', error);
+            // Don't throw here to avoid breaking the refresh cycle
+        }
     }, []);
 
     const refreshStaff = useCallback(async () => {
@@ -108,6 +120,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const refreshSalaryPayments = useCallback(async () => {
         const data = await salaryPaymentsApi.getAll();
         setSalaryPayments(data);
+    }, []);
+
+    const refreshAgencyPayments = useCallback(async () => {
+        const data = await agencyPaymentsApi.getAll();
+        setAgencyPayments(data);
     }, []);
 
     const refreshDashboard = useCallback(async () => {
@@ -128,6 +145,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 refreshStaff(),
                 refreshSupplierPayments(),
                 refreshSalaryPayments(),
+                refreshAgencyPayments(),
                 refreshDashboard(),
             ]);
             setLastSuccessfulRefresh(Date.now());
@@ -139,7 +157,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
             setIsLoading(false);
         }
-    }, [refreshExpenses, refreshSales, refreshStaff, refreshSupplierPayments, refreshSalaryPayments, refreshDashboard]);
+    }, [refreshExpenses, refreshSales, refreshStaff, refreshSupplierPayments, refreshSalaryPayments, refreshAgencyPayments, refreshDashboard]);
 
     // Socket.IO Event Listeners
     useEffect(() => {
@@ -199,6 +217,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             refreshDashboard();
         });
 
+        // Agency payment events
+        socket.on('agency_payment:created', (payment: AgencyPayment) => {
+            setAgencyPayments(prev => [payment, ...prev]);
+            refreshDashboard();
+        });
+        socket.on('agency_payment:updated', (payment: AgencyPayment) => {
+            setAgencyPayments(prev => prev.map(p => p.id === payment.id ? payment : p));
+            refreshDashboard();
+        });
+        socket.on('agency_payment:deleted', ({ id }: { id: number }) => {
+            setAgencyPayments(prev => prev.filter(p => p.id !== id));
+            refreshDashboard();
+        });
+
         // Connection status
         socket.on('connect', () => {
             // console.log('Socket.IO connected with ID:', socket.id);
@@ -225,6 +257,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             socket.off('salary_payment:created');
             socket.off('salary_payment:updated');
             socket.off('salary_payment:deleted');
+            socket.off('agency_payment:created');
+            socket.off('agency_payment:updated');
+            socket.off('agency_payment:deleted');
             socket.off('connect');
             socket.off('disconnect');
         };
@@ -369,6 +404,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await Promise.all([refreshSalaryPayments(), refreshDashboard()]);
     };
 
+    const addAgencyPayment = async (payment: Omit<AgencyPayment, 'id'>) => {
+        const user_id = getCurrentUserId();
+        const paymentWithUser = { ...payment, user_id };
+        const newPayment = await agencyPaymentsApi.create(paymentWithUser);
+        await refreshAgencyPayments();
+        return newPayment;
+    };
+
+    const updateAgencyPayment = async (id: number, payment: Partial<AgencyPayment>) => {
+        const user_id = getCurrentUserId();
+        const paymentWithUser = { ...payment, user_id };
+        await agencyPaymentsApi.update(id, paymentWithUser);
+        await refreshAgencyPayments();
+    };
+
+    const deleteAgencyPayment = async (id: number) => {
+        await agencyPaymentsApi.delete(id);
+        await refreshAgencyPayments();
+    };
+
     return (
         <DataContext.Provider value={{
             expenses,
@@ -376,6 +431,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             staff,
             supplierPayments,
             salaryPayments,
+            agencyPayments,
             dashboardStats,
             isLoading,
             isServerOnline,
@@ -384,6 +440,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             refreshStaff,
             refreshSupplierPayments,
             refreshSalaryPayments,
+            refreshAgencyPayments,
             refreshDashboard,
             refreshAll,
             addExpense,
@@ -401,6 +458,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             addSalaryPayment,
             updateSalaryPayment,
             deleteSalaryPayment,
+            addAgencyPayment,
+            updateAgencyPayment,
+            deleteAgencyPayment,
         }}>
             {children}
         </DataContext.Provider>

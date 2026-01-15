@@ -8,7 +8,36 @@ const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    timeout: 30000,
+    withCredentials: true,
 });
+
+// Add response interceptor to handle errors consistently
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        console.error('API Error:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            url: error.config?.url,
+            method: error.config?.method
+        });
+        
+        // Return a more user-friendly error message
+        if (error.response?.status === 404) {
+            return Promise.reject(new Error('Server endpoint not found. Please check if the server is running.'));
+        } else if (error.response?.status === 500) {
+            return Promise.reject(new Error('Server error occurred. Please try again later.'));
+        } else if (error.code === 'ERR_NETWORK') {
+            return Promise.reject(new Error('Network error. Please check your internet connection.'));
+        } else if (error.code === 'ECONNABORTED') {
+            return Promise.reject(new Error('Request timed out. Please try again.'));
+        }
+        
+        return Promise.reject(error);
+    }
+);
 
 // ============ AUTH ============
 export const authApi = {
@@ -70,6 +99,7 @@ export interface Sale {
     remarks?: string;
     status?: string;
     user_id?: number;
+    received_amount?: number;
     created_by?: string;
     updated_by?: string;
     created_at?: string;
@@ -205,6 +235,40 @@ export const salaryPaymentsApi = {
     },
 };
 
+// ============ AGENCY PAYMENTS ============
+export interface AgencyPayment {
+    id?: number;
+    agency_name: string;
+    amount: number;
+    date: string;
+    receipt_url?: string;
+    remarks?: string;
+    status?: string;
+    user_id?: number;
+    created_by?: string;
+    updated_by?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export const agencyPaymentsApi = {
+    getAll: async (): Promise<AgencyPayment[]> => {
+        const response = await api.get('/agency-payments');
+        return response.data;
+    },
+    create: async (payment: Omit<AgencyPayment, 'id'>): Promise<AgencyPayment> => {
+        const response = await api.post('/agency-payments', payment);
+        return response.data;
+    },
+    update: async (id: number, payment: Partial<AgencyPayment>): Promise<AgencyPayment> => {
+        const response = await api.put(`/agency-payments/${id}`, payment);
+        return response.data;
+    },
+    delete: async (id: number): Promise<void> => {
+        await api.delete(`/agency-payments/${id}`);
+    },
+};
+
 // ============ DASHBOARD ============
 export interface DashboardStats {
     totalSales: number;
@@ -288,7 +352,12 @@ export const fileUploadApi = {
         try {
             // Use axios directly (not the api instance) to avoid JSON Content-Type header
             // Don't set Content-Type - axios will set it automatically with boundary for FormData
-            const response = await axios.post(`${API_URL}/upload`, formData);
+            const response = await axios.post(`${API_URL}/upload`, formData, {
+                timeout: 60000, // 60 second timeout for file uploads
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
             return response.data;
         } catch (error: any) {
             console.error('File upload error:', error);
@@ -306,7 +375,9 @@ export const fileUploadApi = {
     },
     deleteFile: async (filePath: string): Promise<void> => {
         try {
-            await api.post('/upload/delete', { filePath });
+            await api.post('/upload/delete', { filePath }, {
+                timeout: 10000
+            });
         } catch (error) {
             console.error('File deletion error:', error);
             // Non-critical error, don't throw to avoid blocking UI cleanup
@@ -320,7 +391,12 @@ export const fileUploadApi = {
         try {
             // Use axios directly (not the api instance) to avoid JSON Content-Type header
             // Don't set Content-Type - axios will set it automatically with boundary for FormData
-            const response = await axios.post(`${API_URL}/upload-multiple`, formData);
+            const response = await axios.post(`${API_URL}/upload-multiple`, formData, {
+                timeout: 120000, // 2 minute timeout for multiple file uploads
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
             return response.data;
         } catch (error: any) {
             console.error('Multiple file upload error:', error);
@@ -339,4 +415,3 @@ export const fileUploadApi = {
 };
 
 export default api;
-

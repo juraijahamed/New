@@ -9,14 +9,14 @@ import { StatusSelect } from '../components/UI/StatusSelect';
 import { EditableCell } from '../components/UI/EditableCell';
 import { DocumentCell } from '../components/UI/DocumentCell';
 import { useSearchParams } from 'react-router-dom';
-import { fileUploadApi, type SupplierPayment, type Sale } from '../services/api';
+import { fileUploadApi, type SupplierPayment } from '../services/api';
 import MonthlyStatement from '../components/Reports/MonthlyStatement';
 import DailyStatement from '../components/Reports/DailyStatement';
 
 import config from '../config';
 
 const SupplierPayments = () => {
-    const { supplierPayments, sales, isLoading, updateSupplierPayment } = useData();
+    const { supplierPayments, isLoading, updateSupplierPayment } = useData();
     const [searchParams] = useSearchParams();
     const highlightId = searchParams.get('highlightId');
     const highlightKey = searchParams.get('highlightKey');
@@ -28,28 +28,13 @@ const SupplierPayments = () => {
         return [...supplierPayments].sort((a, b) => (a.id || 0) - (b.id || 0));
     }, [supplierPayments]);
 
-    // Combine supplier payments with suppliers from sales table
-    const combinedStatementData = useMemo(() => {
-        const combinedData: (SupplierPayment | Sale)[] = [...supplierPayments];
-        
-        // Extract suppliers from all supplier fields in sales
-        const salesWithSuppliers: Sale[] = [];
-        sales.forEach(sale => {
-            // Check if sale has any supplier field populated
-            if (
-                (sale.supplier && sale.supplier.trim()) ||
-                (sale.bus_supplier && sale.bus_supplier.trim()) ||
-                (sale.visa_supplier && sale.visa_supplier.trim()) ||
-                (sale.ticket_supplier && sale.ticket_supplier.trim())
-            ) {
-                salesWithSuppliers.push(sale);
-            }
-        });
-        
-        combinedData.push(...salesWithSuppliers);
-        
-        return combinedData;
-    }, [supplierPayments, sales]);
+    // Only include supplier payments that were auto-generated from sales for statements
+    const statementData = useMemo(() => {
+        return supplierPayments.filter(payment =>
+            payment.status === 'auto-generated' ||
+            (payment.remarks && payment.remarks.includes('Auto-generated from sale'))
+        );
+    }, [supplierPayments]);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
@@ -181,15 +166,15 @@ const SupplierPayments = () => {
                         Total Payments: <span className="font-mono text-purple-600">AED {totalPayments.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </p>
                 </div>
-                
+
                 {/* Tabs */}
                 <div className="flex justify-center">
                     <div className="flex p-1 bg-gray-100 rounded-lg">
                         <button
                             onClick={() => setActiveTab('transactions')}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-                                activeTab === 'transactions' 
-                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                activeTab === 'transactions'
+                                    ? 'bg-white text-gray-900 shadow-sm'
                                     : 'text-gray-500 hover:text-gray-700'
                             }`}
                         >
@@ -199,8 +184,8 @@ const SupplierPayments = () => {
                         <button
                             onClick={() => setActiveTab('statement')}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-                                activeTab === 'statement' 
-                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                activeTab === 'statement'
+                                    ? 'bg-white text-gray-900 shadow-sm'
                                     : 'text-gray-500 hover:text-gray-700'
                             }`}
                         >
@@ -253,7 +238,7 @@ const SupplierPayments = () => {
                         </div>
                     )
                 ) : (
-                    <MonthlyStatement data={combinedStatementData} type="supplier" />
+                    <MonthlyStatement data={statementData} type="supplier" />
                 )}
             </div>
 

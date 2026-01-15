@@ -57,9 +57,13 @@ async function initSchema() {
         remarks TEXT,
         status TEXT,
         user_id INTEGER,
+        received_amount DOUBLE PRECISION DEFAULT 0,
         bus_supplier TEXT,
         visa_supplier TEXT,
         ticket_supplier TEXT,
+        bus_supplier_cost DOUBLE PRECISION,
+        visa_supplier_cost DOUBLE PRECISION,
+        ticket_supplier_cost DOUBLE PRECISION,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -92,6 +96,18 @@ async function initSchema() {
         advance DOUBLE PRECISION DEFAULT 0,
         total_amount DOUBLE PRECISION,
         paid_month TEXT NOT NULL,
+        date TEXT NOT NULL,
+        receipt_url TEXT,
+        remarks TEXT,
+        status TEXT,
+        user_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS agency_payments (
+        id SERIAL PRIMARY KEY,
+        agency_name TEXT NOT NULL,
+        amount DOUBLE PRECISION NOT NULL,
         date TEXT NOT NULL,
         receipt_url TEXT,
         remarks TEXT,
@@ -169,7 +185,7 @@ async function initSchema() {
   }
 
   // Add created_by_user_id and updated_by_user_id columns to transaction tables
-  const transactionTables = ['expenses', 'sales', 'supplier_payments', 'salary_payments'];
+  const transactionTables = ['expenses', 'sales', 'supplier_payments', 'salary_payments', 'agency_payments'];
   for (const table of transactionTables) {
     try {
       // Check if created_by_user_id exists
@@ -264,6 +280,34 @@ async function initSchema() {
     }
     // Convert NULL to empty string for existing records
     await pool.query("UPDATE sales SET ticket_supplier = '' WHERE ticket_supplier IS NULL");
+
+    // Add supplier cost columns to sales table
+    const busSupplierCostCheck = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name='sales' AND column_name='bus_supplier_cost'
+    `);
+    if (busSupplierCostCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE sales ADD COLUMN bus_supplier_cost DOUBLE PRECISION');
+    }
+
+    const visaSupplierCostCheck = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name='sales' AND column_name='visa_supplier_cost'
+    `);
+    if (visaSupplierCostCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE sales ADD COLUMN visa_supplier_cost DOUBLE PRECISION');
+    }
+
+    const ticketSupplierCostCheck = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name='sales' AND column_name='ticket_supplier_cost'
+    `);
+    if (ticketSupplierCostCheck.rows.length === 0) {
+      await pool.query('ALTER TABLE sales ADD COLUMN ticket_supplier_cost DOUBLE PRECISION');
+    }
   } catch (err) {
     console.error('Error adding new sales columns:', err);
   }
@@ -429,4 +473,3 @@ module.exports = {
   pool,
   initSchema,
 };
-
